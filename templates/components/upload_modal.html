@@ -1,0 +1,115 @@
+<div
+  x-data="uploadModal()"
+  x-show="open"
+  x-cloak
+  @open-upload.window="open = true"
+  @keydown.escape.window="if (open && !busy) open = false"
+  class="fixed inset-0 z-50 flex items-center justify-center p-4">
+
+  <div class="absolute inset-0 bg-ink-900/40 backdrop-blur-sm" @click="if (!busy) open = false"></div>
+
+  <div
+    x-show="open"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 scale-95"
+    x-transition:enter-end="opacity-100 scale-100"
+    class="relative bg-paper-50 border border-paper-300 rounded-2xl shadow-paper-lg w-full max-w-xl overflow-hidden">
+
+    <div class="px-7 pt-7 pb-2 flex items-start justify-between">
+      <div>
+        <h2 class="font-display text-2xl font-semibold tracking-tight">New deck from PDF</h2>
+        <p class="text-ink-500 text-sm mt-1">Drop a text-based PDF. We'll read it and build you a deck.</p>
+      </div>
+      <button
+        type="button"
+        @click="if (!busy) open = false"
+        class="text-ink-400 hover:text-ink-700 transition-colors"
+        aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M6 18L18 6"/></svg>
+      </button>
+    </div>
+
+    <!-- Idle / picking -->
+    <div class="px-7 pb-7" x-show="!busy && !error">
+      <label
+        @dragover.prevent="dragOver = true"
+        @dragleave.prevent="dragOver = false"
+        @drop.prevent="handleDrop($event)"
+        :class="dragOver ? 'border-ember-500 bg-ember-50' : 'border-paper-300 bg-paper-100'"
+        class="mt-4 block cursor-pointer border-2 border-dashed rounded-xl px-6 py-10 text-center transition-colors">
+        <input type="file" accept="application/pdf,.pdf" class="sr-only" @change="handlePick($event)" />
+        <div class="flex flex-col items-center gap-2">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-10 h-10 text-ink-400"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16"/></svg>
+          <div class="font-medium">
+            <template x-if="file">
+              <span x-text="file.name" class="text-ink-900"></span>
+            </template>
+            <template x-if="!file">
+              <span>Click to choose, or drop a PDF here</span>
+            </template>
+          </div>
+          <div class="text-xs text-ink-500">Max 25 MB &middot; PDF only</div>
+        </div>
+      </label>
+
+      <div class="mt-5">
+        <label class="block text-sm font-medium text-ink-700 mb-1">Deck name (optional)</label>
+        <input
+          type="text"
+          x-model="name"
+          placeholder="Auto-generated from filename"
+          class="w-full px-4 py-2.5 bg-paper-100 border border-paper-300 rounded-lg focus:outline-none focus:border-ember-500 focus:ring-2 focus:ring-ember-500/20 transition" />
+      </div>
+
+      <div class="mt-6 flex items-center justify-end gap-3">
+        <button
+          type="button"
+          @click="open = false"
+          class="px-4 py-2 text-ink-600 hover:text-ink-900 transition-colors">
+          Cancel
+        </button>
+        <button
+          type="button"
+          @click="submit()"
+          :disabled="!file"
+          :class="file ? 'bg-ember-500 hover:bg-ember-600 text-paper-50' : 'bg-paper-200 text-ink-400 cursor-not-allowed'"
+          class="px-5 py-2.5 rounded-full font-medium transition-colors">
+          Generate deck
+        </button>
+      </div>
+    </div>
+
+    <!-- Busy -->
+    <div class="px-7 pb-7 pt-2" x-show="busy" x-cloak>
+      <div class="mt-6 space-y-5">
+        <div class="flex items-center gap-3">
+          <div class="relative w-10 h-10">
+            <div class="absolute inset-0 rounded-full border-2 border-paper-300"></div>
+            <div class="absolute inset-0 rounded-full border-2 border-ember-500 border-r-transparent animate-spin"></div>
+          </div>
+          <div>
+            <div class="font-medium" x-text="stage"></div>
+            <div class="text-sm text-ink-500" x-text="stageDetail"></div>
+          </div>
+        </div>
+        <div class="w-full h-1.5 bg-paper-200 rounded-full overflow-hidden">
+          <div class="h-full bg-ember-500 transition-all duration-500 ease-out" :style="`width: ${pct}%`"></div>
+        </div>
+        <p class="text-xs text-ink-500 leading-relaxed">
+          Reading your PDF and writing flashcards. Larger documents take a bit longer &mdash; this usually lands between fifteen and sixty seconds.
+        </p>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div class="px-7 pb-7 pt-2" x-show="error" x-cloak>
+      <div class="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/5 p-4 text-sm text-rose-600">
+        <div class="font-medium mb-1">Could not build a deck</div>
+        <div x-text="error"></div>
+      </div>
+      <div class="mt-5 flex items-center justify-end gap-3">
+        <button type="button" @click="reset()" class="px-5 py-2 rounded-full bg-ink-900 text-paper-50 hover:bg-ember-600 transition-colors">Try again</button>
+      </div>
+    </div>
+  </div>
+</div>

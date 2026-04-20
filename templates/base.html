@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            paper:   { 50: "#fdfaf3", 100: "#faf6ec", 200: "#f2ecdc", 300: "#e6ddc5" },
+            ink:     { 900: "#18140f", 800: "#2a241c", 700: "#3f382c", 600: "#5a5040", 500: "#7a6f5c", 400: "#9a907a" },
+            ember:   { 50: "#fdf5ef", 100: "#fbe8d7", 300: "#f0b280", 500: "#c2410c", 600: "#9a3208", 700: "#7a2805" },
+            moss:    { 500: "#5a7a3a", 600: "#445e2a" },
+            rose:    { 500: "#b8374a", 600: "#902738" },
+            amber2:  { 500: "#d97706" }
+          },
+          fontFamily: {
+            display: ['Fraunces', 'Georgia', 'serif'],
+            sans:    ['Inter', 'system-ui', 'sans-serif'],
+            mono:    ['JetBrains Mono', 'monospace'],
+          },
+          boxShadow: {
+            'paper':     '0 1px 2px rgba(30,20,10,0.04), 0 2px 8px rgba(30,20,10,0.05)',
+            'paper-lg':  '0 2px 4px rgba(30,20,10,0.06), 0 12px 32px rgba(30,20,10,0.08)',
+            'card':      '0 1px 0 rgba(255,255,255,0.6) inset, 0 1px 2px rgba(30,20,10,0.06), 0 8px 24px rgba(30,20,10,0.08)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body class="font-sans text-ink-900 bg-paper-50 antialiased min-h-screen">
+  <div class="page-grain"></div>
+
+  <header class="relative z-10 border-b border-paper-300/60 bg-paper-50/80 backdrop-blur-sm">
+    <div class="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3 group">
+        <span class="inline-block w-8 h-8 rounded-sm bg-ember-500 rotate-[-4deg] shadow-paper group-hover:rotate-0 transition-transform"></span>
+        <span class="font-display text-2xl font-semibold tracking-tight">{{ app_name }}</span>
+      </a>
+      <nav class="flex items-center gap-6 text-sm">
+        <a href="/" class="text-ink-700 hover:text-ember-600 transition-colors">Decks</a>
+        <button
+          type="button"
+          onclick="window.dispatchEvent(new CustomEvent('open-upload'))"
+          class="inline-flex items-center gap-2 rounded-full bg-ink-900 text-paper-50 px-4 py-2 font-medium hover:bg-ember-600 transition-colors">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          New deck
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="relative z-10 max-w-6xl mx-auto px-6 py-10">
+    {% block content %}{% endblock %}
+  </main>
+
+  {% include "components/upload_modal.html" %}
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

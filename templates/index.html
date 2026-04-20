@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section class="mb-12">
+  <div class="flex items-end justify-between gap-6 flex-wrap">
+    <div>
+      <h1 class="font-display text-5xl md:text-6xl font-semibold tracking-tight leading-none">
+        Your decks
+      </h1>
+      <p class="mt-3 text-ink-500 max-w-xl">{{ app_tagline }}. Pick a deck to study, or start a new one.</p>
+    </div>
+    {% if not has_llm %}
+    <div class="text-xs font-mono uppercase tracking-wider text-ink-500 border border-paper-300 bg-paper-100 rounded-md px-3 py-2">
+      Heuristic mode &middot; no API key set
+    </div>
+    {% else %}
+    <div class="text-xs font-mono uppercase tracking-wider text-moss-600 border border-moss-500/30 bg-moss-500/5 rounded-md px-3 py-2">
+      Powered by {{ provider }}
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{% if decks %}
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+  {% for item in decks %}
+  {% set d = item.deck %}
+  {% set s = item.stats %}
+  <a href="/decks/{{ d.id }}"
+     class="group relative block rounded-xl bg-paper-100 border border-paper-300 p-6 shadow-paper hover:shadow-paper-lg hover:-translate-y-0.5 transition-all duration-200">
+
+    <div class="flex items-start justify-between gap-3">
+      <h3 class="font-display text-xl font-semibold leading-snug tracking-tight group-hover:text-ember-600 transition-colors line-clamp-2">
+        {{ d.name }}
+      </h3>
+      {% if s.due_now > 0 %}
+      <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-ember-500 text-paper-50 text-xs font-medium">
+        {{ s.due_now }} due
+      </span>
+      {% endif %}
+    </div>
+
+    <div class="mt-1 text-xs font-mono text-ink-500">
+      {{ s.total }} cards &middot; {{ d.source_pages or 0 }} pages
+    </div>
+
+    <div class="mt-5 h-1.5 w-full bg-paper-200 rounded-full overflow-hidden flex">
+      {% if s.total > 0 %}
+        {% set mastered_pct = (s.mastered * 100 / s.total) | round(2) %}
+        {% set review_pct   = (s.review   * 100 / s.total) | round(2) %}
+        {% set learning_pct = (s.learning * 100 / s.total) | round(2) %}
+        <div class="h-full bg-moss-500"   style="width: {{ mastered_pct }}%"></div>
+        <div class="h-full bg-ember-500"  style="width: {{ review_pct }}%"></div>
+        <div class="h-full bg-amber2-500" style="width: {{ learning_pct }}%"></div>
+      {% endif %}
+    </div>
+
+    <div class="mt-3 flex items-center gap-4 text-xs text-ink-600">
+      <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-moss-500"></span>{{ s.mastered }} mastered</span>
+      <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-ember-500"></span>{{ s.review }} review</span>
+      <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-paper-300"></span>{{ s.new }} new</span>
+    </div>
+  </a>
+  {% endfor %}
+</section>
+{% else %}
+<section class="rounded-2xl border-2 border-dashed border-paper-300 bg-paper-100/60 px-8 py-16 text-center">
+  <div class="max-w-md mx-auto">
+    <div class="inline-block mb-6">
+      <div class="relative w-24 h-28">
+        <div class="absolute inset-0 bg-paper-200 border border-paper-300 rounded-md rotate-[-6deg] shadow-paper"></div>
+        <div class="absolute inset-0 bg-paper-100 border border-paper-300 rounded-md rotate-[3deg] shadow-paper"></div>
+        <div class="absolute inset-0 bg-ember-50 border border-ember-300 rounded-md shadow-paper flex items-center justify-center">
+          <span class="font-display text-3xl text-ember-600">Q?</span>
+        </div>
+      </div>
+    </div>
+    <h2 class="font-display text-3xl font-semibold tracking-tight">Nothing to study yet</h2>
+    <p class="mt-2 text-ink-500">Drop in a PDF &mdash; a chapter, a set of lecture notes &mdash; and we'll build your first deck.</p>
+    <button
+      type="button"
+      onclick="window.dispatchEvent(new CustomEvent('open-upload'))"
+      class="mt-6 inline-flex items-center gap-2 rounded-full bg-ink-900 text-paper-50 px-5 py-2.5 font-medium hover:bg-ember-600 transition-colors">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+      Upload your first PDF
+    </button>
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/upload.js"></script>
+{% endblock %}
