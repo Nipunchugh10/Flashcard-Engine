@@ -166,6 +166,10 @@ function studySession(deckId, totalCards) {
       this.loading = true;
       this.flipped = false;
       const res = await fetch(`/api/study/${this.deckId}/next`);
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       const data = await res.json();
       this.loading = false;
       if (data.done) {
@@ -186,11 +190,15 @@ function studySession(deckId, totalCards) {
     async rate(rating) {
       if (!this.card || this.rating) return;
       this.rating = true;
-      await fetch(`/api/study/cards/${this.card.id}/rate`, {
+      const res = await fetch(`/api/study/cards/${this.card.id}/rate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rating }),
       });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       this.rating = false;
       await this.loadNext();
     },

@@ -176,6 +176,10 @@ function deckPage(deckId) {
       });
       if (this.search.trim()) params.set('search', this.search.trim());
       const res = await fetch(`/api/cards?${params}`);
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       this.cards = await res.json();
       this.loading = false;
     },
@@ -192,6 +196,10 @@ function deckPage(deckId) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ front: this.editFront, back: this.editBack }),
       });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       if (res.ok) {
         this.editingId = null;
         await this.loadCards();
@@ -201,6 +209,10 @@ function deckPage(deckId) {
     async deleteCard(id) {
       if (!confirm('Delete this card?')) return;
       const res = await fetch(`/api/cards/${id}`, { method: 'DELETE' });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       if (res.ok) await this.loadCards();
     },
 
@@ -210,12 +222,20 @@ function deckPage(deckId) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: this.newName }),
       });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       if (res.ok) window.location.reload();
     },
 
     async deleteDeck() {
       if (!confirm('Delete this entire deck and all its cards?')) return;
       const res = await fetch(`/api/decks/${this.deckId}`, { method: 'DELETE' });
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       if (res.ok) window.location.href = '/';
     },
   };

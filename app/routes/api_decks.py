@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import config, models
+from ..auth import get_current_user
 from ..database import get_db
 from ..flashcard_generator import generate_cards_for_chunks
 from ..pdf_processor import extract_pdf
@@ -35,17 +36,36 @@ def _serialize_deck(deck: models.Deck, db: Session) -> DeckOut:
     )
 
 
+def _get_user_deck(deck_id: int, user: models.User, db: Session) -> models.Deck:
+    """Fetch a deck and verify it belongs to the user."""
+    deck = db.get(models.Deck, deck_id)
+    if not deck:
+        raise HTTPException(status_code=404, detail="Deck not found")
+    if deck.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return deck
+
+
 @router.get("", response_model=list[DeckOut])
-def list_decks(db: Session = Depends(get_db)):
-    decks = db.execute(select(models.Deck).order_by(models.Deck.updated_at.desc())).scalars().all()
+def list_decks(
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    decks = db.execute(
+        select(models.Deck)
+        .where(models.Deck.user_id == user.id)
+        .order_by(models.Deck.updated_at.desc())
+    ).scalars().all()
     return [_serialize_deck(d, db) for d in decks]
 
 
 @router.get("/{deck_id}", response_model=DeckOut)
-def get_deck(deck_id: int, db: Session = Depends(get_db)):
-    deck = db.get(models.Deck, deck_id)
-    if not deck:
-        raise HTTPException(status_code=404, detail="Deck not found")
+def get_deck(
+    deck_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    deck = _get_user_deck(deck_id, user, db)
     return _serialize_deck(deck, db)
 
 
@@ -54,6 +74,7 @@ async def upload_pdf(
     file: UploadFile = File(...),
     name: str | None = Form(None),
     db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
 ):
     """Upload a PDF, extract it, generate cards, and create a deck."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -103,6 +124,7 @@ async def upload_pdf(
     # Create deck + cards in DB
     deck_name = (name or "").strip() or _derive_deck_name(file.filename)
     deck = models.Deck(
+        user_id=user.id,
         name=deck_name[:200],
         description=f"Generated from {file.filename}",
         source_filename=file.filename,
@@ -129,10 +151,13 @@ async def upload_pdf(
 
 
 @router.patch("/{deck_id}", response_model=DeckOut)
-def rename_deck(deck_id: int, payload: RenameDeckIn, db: Session = Depends(get_db)):
-    deck = db.get(models.Deck, deck_id)
-    if not deck:
-        raise HTTPException(status_code=404, detail="Deck not found")
+def rename_deck(
+    deck_id: int,
+    payload: RenameDeckIn,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    deck = _get_user_deck(deck_id, user, db)
     deck.name = payload.name.strip()
     if payload.description is not None:
         deck.description = payload.description
@@ -142,10 +167,12 @@ def rename_deck(deck_id: int, payload: RenameDeckIn, db: Session = Depends(get_d
 
 
 @router.delete("/{deck_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_deck(deck_id: int, db: Session = Depends(get_db)):
-    deck = db.get(models.Deck, deck_id)
-    if not deck:
-        raise HTTPException(status_code=404, detail="Deck not found")
+def delete_deck(
+    deck_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    deck = _get_user_deck(deck_id, user, db)
     db.delete(deck)
     db.commit()
     return None

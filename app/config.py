@@ -56,6 +56,11 @@ MAX_CARDS_PER_CHUNK = int(os.getenv("MAX_CARDS_PER_CHUNK", "8"))
 CHUNK_TARGET_CHARS = int(os.getenv("CHUNK_TARGET_CHARS", "3500"))
 MAX_TOTAL_CARDS = int(os.getenv("MAX_TOTAL_CARDS", "80"))
 
+# --- Auth -----------------------------------------------------------------
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me-in-production")
+SESSION_COOKIE_NAME = "recall_session"
+SESSION_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
+
 # --- App ------------------------------------------------------------------
 APP_NAME = "Recall"
 APP_TAGLINE = "Turn any PDF into a practice-ready deck"

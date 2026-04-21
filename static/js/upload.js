@@ -74,6 +74,10 @@ function uploadModal() {
         if (this.name) fd.append('name', this.name);
 
         const res = await fetch('/api/decks/upload', { method: 'POST', body: fd });
+        if (res.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
 
         clearInterval(this._progressTimer);
         if (!res.ok) {

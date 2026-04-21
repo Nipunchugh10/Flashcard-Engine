@@ -20,6 +20,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .. import models, spaced_repetition
+from ..auth import get_current_user
 from ..database import get_db
 from ..schemas import CardOut, RateCardIn
 from ..stats import compute_deck_stats
@@ -30,12 +31,24 @@ router = APIRouter(prefix="/api/study", tags=["study"])
 NEW_CARDS_PER_SESSION = 20
 
 
-@router.get("/{deck_id}/next")
-def next_card(deck_id: int, db: Session = Depends(get_db)):
-    """Return the next card to study, or {done: true} if none."""
+def _get_user_deck(deck_id: int, user: models.User, db: Session) -> models.Deck:
+    """Fetch a deck and verify it belongs to the user."""
     deck = db.get(models.Deck, deck_id)
     if not deck:
         raise HTTPException(status_code=404, detail="Deck not found")
+    if deck.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return deck
+
+
+@router.get("/{deck_id}/next")
+def next_card(
+    deck_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Return the next card to study, or {done: true} if none."""
+    deck = _get_user_deck(deck_id, user, db)
 
     now = datetime.now(timezone.utc)
 
@@ -84,10 +97,20 @@ def next_card(deck_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/cards/{card_id}/rate", response_model=CardOut)
-def rate_card(card_id: int, payload: RateCardIn, db: Session = Depends(get_db)):
+def rate_card(
+    card_id: int,
+    payload: RateCardIn,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
     card = db.get(models.Card, card_id)
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
+
+    # Verify ownership
+    deck = db.get(models.Deck, card.deck_id)
+    if not deck or deck.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     new_state = spaced_repetition.apply_rating(
         rating=payload.rating,  # type: ignore[arg-type]

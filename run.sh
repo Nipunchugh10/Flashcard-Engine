@@ -7,4 +7,10 @@ if [ ! -f ".env" ]; then
   cp .env.example .env
 fi
 
-exec uvicorn app.main:app --reload --host 0.0.0.0 --port "${PORT:-8000}"
+# Prefer the venv Python if it exists; fall back to whatever is on PATH.
+PYTHON=".venv311/Scripts/python"
+if [ ! -f "$PYTHON" ]; then
+  PYTHON="python"
+fi
+
+exec "$PYTHON" -m uvicorn app.main:app --reload --host 0.0.0.0 --port "${PORT:-8000}"

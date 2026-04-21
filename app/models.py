@@ -14,10 +14,25 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    decks: Mapped[list["Deck"]] = relationship(
+        "Deck", back_populates="owner", cascade="all, delete-orphan"
+    )
+
+
 class Deck(Base):
     __tablename__ = "decks"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, default=None)
     source_filename: Mapped[Optional[str]] = mapped_column(String(500), default=None)
@@ -27,6 +42,7 @@ class Deck(Base):
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
 
+    owner: Mapped["User"] = relationship("User", back_populates="decks")
     cards: Mapped[list["Card"]] = relationship(
         "Card",
         back_populates="deck",

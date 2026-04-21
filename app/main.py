@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config
 from .database import init_db
-from .routes import api_cards, api_decks, api_study, pages
+from .routes import api_cards, api_decks, api_study, auth, pages
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +50,9 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # HTML pages
 app.include_router(pages.router)
+
+# Auth (login, signup, logout)
+app.include_router(auth.router)
 
 # JSON APIs
 app.include_router(api_decks.router)

@@ -2,13 +2,16 @@
 import os
 import pathlib
 import sys
+import tempfile
 
-# Make sure the app runs against a fresh DB.
 here = pathlib.Path(__file__).resolve().parent
-db_path = here / "data" / "flashcards.db"
-db_path.parent.mkdir(exist_ok=True)
-if db_path.exists():
-    db_path.unlink()
+
+# Use an isolated temp DB so Windows file locks (or a running dev server)
+# can't break the smoke test.
+_tmpdir = pathlib.Path(tempfile.mkdtemp(prefix="recall-smoke-"))
+os.environ["DATABASE_URL"] = f"sqlite:///{_tmpdir / 'smoke.db'}"
+# Keep tests deterministic and offline regardless of external LLM state.
+os.environ["LLM_PROVIDER"] = "heuristic"
 
 sys.path.insert(0, str(here))
 
@@ -23,7 +26,45 @@ def main():
         run_tests(client)
 
 
+def _minimal_pdf_bytes() -> bytes:
+    # Generate a tiny, valid single-page PDF using PyMuPDF (already a dependency).
+    import fitz  # PyMuPDF
+
+    doc = fitz.open()
+    page = doc.new_page()
+    text = (
+        "Spaced Repetition is a learning method that schedules reviews at expanding intervals to improve long-term memory retention. "
+        "Active Recall is a study technique where you retrieve information from memory instead of rereading notes. "
+        "Interleaving refers to mixing related topics during practice so the learner improves discrimination between concepts. "
+        "A Review Queue is the ordered set of cards that are due now based on each card's next review timestamp. "
+        "A Flashcard Deck is a collection of prompts and answers used to train memory through repeated testing. "
+        "Difficulty Rating means the learner reports how hard retrieval felt, which updates interval and ease factor. "
+    )
+    page.insert_textbox((50, 50, 550, 780), text, fontsize=12)
+    pdf = doc.tobytes()
+    doc.close()
+    return pdf
+
+
+def _signup(client) -> None:
+    r = client.post(
+        "/signup",
+        data={
+            "username": "Smoke Tester",
+            "email": "smoke@example.com",
+            "password": "secret123",
+            "confirm_password": "secret123",
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code in (302, 303), r.text[:500]
+
+
 def run_tests(client):
+
+    # --- 0. Create an account (auth is required for app pages + APIs) ----------
+    _signup(client)
+    print("[0] POST /signup                      -> 302  (session cookie set)")
 
     # --- 1. Home page -----------------------------------------------------------
     r = client.get("/")
@@ -39,12 +80,15 @@ def run_tests(client):
     print("[2] GET /api/decks                    -> 200  (empty list)")
 
     # --- 3. Upload the challenge PDF itself as the test input -------------------
-    pdf_path = "/mnt/user-data/uploads/AI_Builder___Build_Challenge__2___1___1_.pdf"
+    # Use a minimal generated PDF to keep this portable across machines.
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tf:
+        tf.write(_minimal_pdf_bytes())
+        pdf_path = tf.name
     with open(pdf_path, "rb") as f:
         r = client.post(
             "/api/decks/upload",
-            files={"file": ("challenge.pdf", f, "application/pdf")},
-            data={"name": "Build Challenge Spec"},
+            files={"file": ("smoke.pdf", f, "application/pdf")},
+            data={"name": "Smoke Test Deck"},
         )
     assert r.status_code == 201, f"{r.status_code}: {r.text[:500]}"
     deck = r.json()
@@ -55,14 +99,14 @@ def run_tests(client):
     # --- 4. Home page now shows the deck ---------------------------------------
     r = client.get("/")
     assert r.status_code == 200
-    assert "Build Challenge Spec" in r.text
+    assert "Smoke Test Deck" in r.text
     assert "Nothing to study yet" not in r.text
     print("[4] GET /  (after upload)             -> 200  (deck appears)")
 
     # --- 5. Deck page renders ---------------------------------------------------
     r = client.get(f"/decks/{deck_id}")
     assert r.status_code == 200, r.text[:400]
-    assert "Build Challenge Spec" in r.text
+    assert "Smoke Test Deck" in r.text
     print(f"[5] GET /decks/{deck_id}                     -> 200  (deck page renders)")
 
     # --- 6. Card list via API ---------------------------------------------------

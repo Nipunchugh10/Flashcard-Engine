@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            paper:   { 50: "#fdfaf3", 100: "#faf6ec", 200: "#f2ecdc", 300: "#e6ddc5" },
+            ink:     { 900: "#18140f", 800: "#2a241c", 700: "#3f382c", 600: "#5a5040", 500: "#7a6f5c", 400: "#9a907a" },
+            ember:   { 50: "#fdf5ef", 100: "#fbe8d7", 300: "#f0b280", 500: "#c2410c", 600: "#9a3208", 700: "#7a2805" },
+            moss:    { 500: "#5a7a3a", 600: "#445e2a" },
+            rose:    { 500: "#b8374a", 600: "#902738" },
+            amber2:  { 500: "#d97706" }
+          },
+          fontFamily: {
+            display: ['Fraunces', 'Georgia', 'serif'],
+            sans:    ['Inter', 'system-ui', 'sans-serif'],
+            mono:    ['JetBrains Mono', 'monospace'],
+          },
+          boxShadow: {
+            'paper':     '0 1px 2px rgba(30,20,10,0.04), 0 2px 8px rgba(30,20,10,0.05)',
+            'paper-lg':  '0 2px 4px rgba(30,20,10,0.06), 0 12px 32px rgba(30,20,10,0.08)',
+            'card':      '0 1px 0 rgba(255,255,255,0.6) inset, 0 1px 2px rgba(30,20,10,0.06), 0 8px 24px rgba(30,20,10,0.08)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <link rel="stylesheet" href="/static/css/style.css" />
+  {% block head %}{% endblock %}
+</head>
+<body class="font-sans text-ink-900 bg-paper-50 antialiased min-h-screen flex items-center justify-center">
+  <div class="page-grain"></div>
+
+  <main class="relative z-10 w-full max-w-md mx-auto px-6 py-12">
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
