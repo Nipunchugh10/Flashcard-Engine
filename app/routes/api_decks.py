@@ -223,11 +223,16 @@ def _process_deck_background(deck_id: int, pdf_path: Path) -> None:
             return
 
         # --- Step 3: Persist cards ---
+        # IMPORTANT: Use the `deck_id` parameter (not deck.id) because after the
+        # early db.commit() above, SQLAlchemy marks `deck` as expired. On
+        # PostgreSQL, accessing deck.id then triggers a lazy-load round-trip that
+        # can silently fail, causing cards to be saved with a NULL deck_id and
+        # therefore never appearing in any deck's card count.
         logger.info("Background: deck %d saving %d cards", deck_id, len(generated))
         for g in generated:
             db.add(
                 models.Card(
-                    deck_id=deck.id,
+                    deck_id=deck_id,          # use the function parameter, always safe
                     front=g.front,
                     back=g.back,
                     card_type=g.card_type,
@@ -236,6 +241,7 @@ def _process_deck_background(deck_id: int, pdf_path: Path) -> None:
                 )
             )
 
+        deck = db.get(models.Deck, deck_id)   # re-fetch to avoid stale reference
         deck.generation_status = "ready"
         deck.generation_error = None
         db.commit()

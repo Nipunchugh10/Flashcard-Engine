@@ -6,12 +6,17 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .config import DATABASE_URL
 
+_is_sqlite = DATABASE_URL.startswith("sqlite")
 engine = create_engine(
     DATABASE_URL,
     connect_args={
         "check_same_thread": False,
         "timeout": 30,  # 30 seconds busy timeout
-    } if DATABASE_URL.startswith("sqlite") else {},
+    } if _is_sqlite else {},
+    # pool_pre_ping: on every checkout, send a lightweight ping to verify the
+    # connection is still alive. Critical on PostgreSQL (Render) where idle
+    # connections can be dropped by the DB or network layer between requests.
+    pool_pre_ping=not _is_sqlite,
     echo=False,
 )
 
