@@ -15,6 +15,10 @@ DATA_DIR.mkdir(exist_ok=True)
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'flashcards.db'}")
+# Render (and some other hosts) provide a postgres:// URL, but SQLAlchemy 2.x
+# dropped support for the "postgres" dialect alias — only "postgresql" works.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # --- LLM providers ---------------------------------------------------------
 # We support three providers. The first one with a key set wins.
