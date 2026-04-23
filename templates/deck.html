@@ -4,7 +4,33 @@
 
 {% block content %}
 
-<div x-data="deckPage({{ deck.id }}, '{{ deck.generation_status }}')" x-init="loadCards()">
+<div x-data="deckPage({{ deck.id }}, '{{ deck.generation_status }}')" x-init="init()">
+
+<!-- Generation-in-progress overlay -->
+<div x-show="generationStatus === 'processing'" x-cloak
+     class="fixed inset-0 z-40 flex items-center justify-center bg-paper-50/80 backdrop-blur-sm">
+  <div class="bg-paper-50 border border-paper-300 rounded-2xl shadow-paper-lg p-10 max-w-sm w-full text-center">
+    <div class="flex justify-center mb-6">
+      <div class="relative w-14 h-14">
+        <div class="absolute inset-0 rounded-full border-2 border-paper-300"></div>
+        <div class="absolute inset-0 rounded-full border-2 border-ember-500 border-r-transparent animate-spin"></div>
+      </div>
+    </div>
+    <h2 class="font-display text-2xl font-semibold tracking-tight">Building your deck</h2>
+    <p class="mt-2 text-ink-500 text-sm" x-text="generationDetail">Reading PDF and writing flashcards…</p>
+    <div class="mt-6 w-full h-1.5 bg-paper-200 rounded-full overflow-hidden">
+      <div class="h-full bg-ember-500 animate-pulse" style="width: 60%"></div>
+    </div>
+    <p class="mt-4 text-xs text-ink-400">This page will update automatically when cards are ready.</p>
+  </div>
+</div>
+
+<!-- Generation-failed banner -->
+<div x-show="generationStatus === 'failed'" x-cloak
+     class="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/5 p-5">
+  <div class="font-medium text-rose-600 mb-1">Card generation failed</div>
+  <div class="text-sm text-rose-500" x-text="generationError"></div>
+</div>
 
 <!-- Header -->
 <section class="mb-10">
@@ -152,9 +178,10 @@ function deckPage(deckId, generationStatus) {
   return {
     deckId,
     generationStatus,
+    generationDetail: 'Reading PDF and writing flashcards…',
+    generationError: '',
     cards: [],
     loading: true,
-    _retried: false,
     search: '',
     statusFilter: 'all',
     filters: [
@@ -169,6 +196,57 @@ function deckPage(deckId, generationStatus) {
     editBack: '',
     editingName: false,
     newName: '',
+    _pollTimer: null,
+    _pollTick: 0,
+
+    init() {
+      if (this.generationStatus === 'processing') {
+        // Deck is still being generated — start polling and show overlay.
+        // Cards are loaded only after a full page reload when status is ready.
+        this.loading = false;
+        this._startPolling();
+      } else {
+        // Deck already ready (or failed) — load cards normally.
+        this.loadCards();
+      }
+    },
+
+    _startPolling() {
+      this._pollTimer = setInterval(async () => {
+        this._pollTick++;
+        // Animate the detail text so the user knows something is happening.
+        const msgs = [
+          'Reading PDF and writing flashcards…',
+          'AI is drafting questions and answers…',
+          'Finishing up and saving cards…',
+        ];
+        this.generationDetail = msgs[this._pollTick % msgs.length];
+
+        try {
+          const res = await fetch(`/api/decks/${this.deckId}/status`);
+          if (!res.ok) return; // transient — keep trying
+          const data = await res.json();
+
+          if (data.generation_status === 'ready') {
+            clearInterval(this._pollTimer);
+            // Full page reload: the server re-renders the template with the
+            // correct card count in the stats strip and all cards visible.
+            window.location.reload();
+
+          } else if (data.generation_status === 'failed') {
+            clearInterval(this._pollTimer);
+            this.generationStatus = 'failed';
+            this.generationError = data.generation_error || 'Card generation failed.';
+
+          } else if (this._pollTick > 90) {
+            // 90 × 2 s = 3 min — give up
+            clearInterval(this._pollTimer);
+            this.generationStatus = 'failed';
+            this.generationError = 'Generation is taking too long. Try a smaller PDF.';
+          }
+        } catch (_) { /* network hiccup — keep polling */ }
+      }, 2000);
+    },
 
     async loadCards() {
       this.loading = true;
@@ -184,14 +262,6 @@ function deckPage(deckId, generationStatus) {
       }
       this.cards = await res.json();
       this.loading = false;
-
-      // Self-healing: if the deck is "ready" but cards haven't appeared yet
-      // (commit-visibility lag), retry once after 2 seconds then reload the page
-      // so the server-rendered stats also update.
-      if (this.cards.length === 0 && this.generationStatus === 'ready' && !this._retried && !this.search.trim() && this.statusFilter === 'all') {
-        this._retried = true;
-        setTimeout(() => window.location.reload(), 2000);
-      }
     },
 
     startEdit(card) {
