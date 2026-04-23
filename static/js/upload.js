@@ -96,8 +96,28 @@ function uploadModal() {
               this._stopPoll();
               this.pct = 100;
               this.stage = 'Done';
-              this.stageDetail = `Generated ${data.stats?.total ?? 0} cards`;
-              setTimeout(() => { window.location.href = `/decks/${deckId}`; }, 500);
+              const total = data.stats?.total ?? 0;
+              this.stageDetail = `Generated ${total} cards`;
+              // Wait until the card count is non-zero before redirecting.
+              // The backend commits cards first then flips status, so cards
+              // should already be visible — but give it one extra poll to be sure.
+              if (total === 0) {
+                // Re-poll once more in 1.5 s to get the real count, then redirect.
+                setTimeout(async () => {
+                  try {
+                    const r2 = await fetch(`/api/decks/${deckId}/status`);
+                    if (r2.ok) {
+                      const d2 = await r2.json();
+                      const realTotal = d2.stats?.total ?? 0;
+                      this.stageDetail = `Generated ${realTotal} cards`;
+                    }
+                  } finally {
+                    window.location.href = `/decks/${deckId}`;
+                  }
+                }, 1500);
+              } else {
+                setTimeout(() => { window.location.href = `/decks/${deckId}`; }, 800);
+              }
               resolve();
             } else if (data.generation_status === 'failed') {
               this._stopPoll();

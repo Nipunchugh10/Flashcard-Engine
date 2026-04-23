@@ -4,7 +4,7 @@
 
 {% block content %}
 
-<div x-data="deckPage({{ deck.id }})" x-init="loadCards()">
+<div x-data="deckPage({{ deck.id }}, '{{ deck.generation_status }}')" x-init="loadCards()">
 
 <!-- Header -->
 <section class="mb-10">
@@ -148,11 +148,13 @@
 
 {% block scripts %}
 <script>
-function deckPage(deckId) {
+function deckPage(deckId, generationStatus) {
   return {
     deckId,
+    generationStatus,
     cards: [],
     loading: true,
+    _retried: false,
     search: '',
     statusFilter: 'all',
     filters: [
@@ -182,6 +184,14 @@ function deckPage(deckId) {
       }
       this.cards = await res.json();
       this.loading = false;
+
+      // Self-healing: if the deck is "ready" but cards haven't appeared yet
+      // (commit-visibility lag), retry once after 2 seconds then reload the page
+      // so the server-rendered stats also update.
+      if (this.cards.length === 0 && this.generationStatus === 'ready' && !this._retried && !this.search.trim() && this.statusFilter === 'all') {
+        this._retried = true;
+        setTimeout(() => window.location.reload(), 2000);
+      }
     },
 
     startEdit(card) {

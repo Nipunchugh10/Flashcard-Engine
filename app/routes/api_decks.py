@@ -222,17 +222,16 @@ def _process_deck_background(deck_id: int, pdf_path: Path) -> None:
             db.commit()
             return
 
-        # --- Step 3: Persist cards ---
-        # IMPORTANT: Use the `deck_id` parameter (not deck.id) because after the
-        # early db.commit() above, SQLAlchemy marks `deck` as expired. On
-        # PostgreSQL, accessing deck.id then triggers a lazy-load round-trip that
-        # can silently fail, causing cards to be saved with a NULL deck_id and
-        # therefore never appearing in any deck's card count.
+        # --- Step 3: Persist cards (commit 1) ---
+        # Cards are committed in their OWN transaction BEFORE the status is
+        # flipped to "ready".  This eliminates the race condition where the
+        # polling endpoint reads status="ready" but the cards haven't appeared
+        # yet because they were in the same not-yet-visible transaction.
         logger.info("Background: deck %d saving %d cards", deck_id, len(generated))
         for g in generated:
             db.add(
                 models.Card(
-                    deck_id=deck_id,          # use the function parameter, always safe
+                    deck_id=deck_id,   # always use the function param, never deck.id
                     front=g.front,
                     back=g.back,
                     card_type=g.card_type,
@@ -240,8 +239,12 @@ def _process_deck_background(deck_id: int, pdf_path: Path) -> None:
                     tags=",".join(g.tags) if g.tags else None,
                 )
             )
+        db.commit()  # cards are now permanently in the DB
 
-        deck = db.get(models.Deck, deck_id)   # re-fetch to avoid stale reference
+        # --- Step 4: Mark deck ready (commit 2) ---
+        # By the time any polling request sees generation_status="ready",
+        # the cards from commit 1 are guaranteed to be visible.
+        deck = db.get(models.Deck, deck_id)
         deck.generation_status = "ready"
         deck.generation_error = None
         db.commit()
