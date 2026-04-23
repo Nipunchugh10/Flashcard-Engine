@@ -175,10 +175,13 @@ def _process_deck_background(deck_id: int, pdf_path: Path) -> None:
     """
     db = SessionLocal()
     try:
+        # Give the main request a moment to finish its commit if needed.
         deck = db.get(models.Deck, deck_id)
         if not deck:
-            logger.error("Background: deck %d disappeared", deck_id)
+            logger.error("Background: deck %d disappeared before processing", deck_id)
             return
+
+        logger.info("Background: starting deck %d (%s)", deck_id, deck.name)
 
         # --- Step 1: Extract ---
         try:
@@ -188,19 +191,19 @@ def _process_deck_background(deck_id: int, pdf_path: Path) -> None:
             deck.generation_status = "failed"
             deck.generation_error = f"Could not read PDF: {e}"
             db.commit()
-            _safe_unlink(pdf_path)
             return
 
         if not extract.chunks:
+            logger.warning("Background: deck %d has no text chunks", deck_id)
             deck.generation_status = "failed"
             deck.generation_error = (
                 "PDF appears empty or contains only images. Try a text-based PDF."
             )
             db.commit()
-            _safe_unlink(pdf_path)
             return
 
         deck.source_pages = extract.page_count
+        db.commit() # Save page count early
 
         # --- Step 2: Generate ---
         try:
@@ -210,17 +213,17 @@ def _process_deck_background(deck_id: int, pdf_path: Path) -> None:
             deck.generation_status = "failed"
             deck.generation_error = f"Card generation failed: {e}"
             db.commit()
-            _safe_unlink(pdf_path)
             return
 
         if not generated:
+            logger.warning("Background: deck %d generated 0 cards", deck_id)
             deck.generation_status = "failed"
-            deck.generation_error = "Couldn't generate any cards from this PDF."
+            deck.generation_error = "Couldn't generate any cards from this PDF. Try a more text-dense document."
             db.commit()
-            _safe_unlink(pdf_path)
             return
 
         # --- Step 3: Persist cards ---
+        logger.info("Background: deck %d saving %d cards", deck_id, len(generated))
         for g in generated:
             db.add(
                 models.Card(
@@ -243,13 +246,14 @@ def _process_deck_background(deck_id: int, pdf_path: Path) -> None:
     except Exception:
         logger.exception("Background: unexpected error for deck %d", deck_id)
         try:
+            db.rollback()
             deck = db.get(models.Deck, deck_id)
             if deck:
                 deck.generation_status = "failed"
-                deck.generation_error = "Unexpected error during generation."
+                deck.generation_error = "Unexpected server error during generation."
                 db.commit()
         except Exception:
-            pass
+            logger.exception("Background: failed to save failure status for deck %d", deck_id)
     finally:
         db.close()
         _safe_unlink(pdf_path)

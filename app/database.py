@@ -8,9 +8,21 @@ from .config import DATABASE_URL
 
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
+    connect_args={
+        "check_same_thread": False,
+        "timeout": 30,  # 30 seconds busy timeout
+    } if DATABASE_URL.startswith("sqlite") else {},
     echo=False,
 )
+
+@__import__("sqlalchemy").event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """Enable WAL mode for SQLite to allow concurrent reads and writes."""
+    if DATABASE_URL.startswith("sqlite"):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

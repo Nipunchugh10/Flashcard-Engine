@@ -107,6 +107,10 @@ def _call_openai_compatible(
             },
         ],
     )
+    if not response.choices:
+        logger.warning("[%s] LLM returned no choices.", provider_name)
+        return []
+
     text = (response.choices[0].message.content or "").strip()
     logger.debug("[%s] raw output length=%d", provider_name, len(text))
     return _parse_cards(text, chunk)
@@ -175,22 +179,36 @@ _JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
 def _parse_cards(text: str, chunk: str) -> list[GeneratedCard]:
     """Parse the model output into GeneratedCard objects. Be defensive."""
     text = text.strip()
-    # strip accidental markdown fences
-    if text.startswith("```"):
-        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
-        text = re.sub(r"\n?```$", "", text)
 
-    # If there's explanatory text around the JSON, extract the array.
-    if not text.startswith("["):
-        m = _JSON_ARRAY_RE.search(text)
-        if m:
-            text = m.group(0)
+    # If the text is empty, nothing to do.
+    if not text:
+        return []
+
+    # 1. Attempt to find a JSON array '[' ... ']' in the text.
+    # We look for the first '[' and the last ']' to handle cases where the LLM
+    # might wrap the JSON in prose or multiple markdown blocks.
+    start = text.find("[")
+    end = text.rfind("]")
+
+    if start != -1 and end != -1 and end > start:
+        json_str = text[start : end + 1]
+    else:
+        # If no brackets are found, maybe it's just a raw list or something we can't parse.
+        logger.warning("No JSON array brackets found in LLM output.")
+        return []
 
     try:
-        data = json.loads(text)
+        # 2. Parse the JSON.
+        data = json.loads(json_str)
     except json.JSONDecodeError as e:
-        logger.warning("Failed to parse LLM JSON output: %s", e)
-        return []
+        logger.warning("Failed to parse LLM JSON output: %s. Raw was: %r", e, text[:200])
+        # Last-ditch: try cleaning common markdown junk if the first pass failed.
+        try:
+            cleaned = re.sub(r"```[a-zA-Z]*\n?", "", json_str)
+            cleaned = re.sub(r"\n?```", "", cleaned)
+            data = json.loads(cleaned)
+        except Exception:
+            return []
 
     if not isinstance(data, list):
         return []
@@ -233,6 +251,7 @@ _DEF_PATTERNS = [
     ),
     re.compile(r"(?P<term>[A-Z][A-Za-z0-9\- ]{2,60})\s+refers to\s+(?P<def>[^.]+\.)"),
     re.compile(r"(?P<term>[A-Z][A-Za-z0-9\- ]{2,60})\s+means\s+(?P<def>[^.]+\.)"),
+    re.compile(r"(?P<term>[A-Z][A-Za-z0-9\- ]{2,60})\s*:\s*(?P<def>[^.\n]+\.)"),
 ]
 
 
@@ -247,7 +266,7 @@ def _heuristic_cards(chunk: str, max_cards: int) -> list[GeneratedCard]:
             term = m.group("term").strip().rstrip(":,-")
             definition = m.group("def").strip()
             key = term.lower()
-            if key in seen_terms or len(term.split()) > 8:
+            if key in seen_terms or len(term.split()) > 10:
                 continue
             seen_terms.add(key)
             cards.append(
@@ -267,8 +286,10 @@ def _heuristic_cards(chunk: str, max_cards: int) -> list[GeneratedCard]:
     for sent in sentences:
         if len(cards) >= max_cards:
             break
-        if len(sent) < 60 or len(sent) > 240:
+        sent = sent.strip()
+        if len(sent) < 30 or len(sent) > 500:
             continue
+        # Look for capitalized terms that are likely proper nouns or concepts
         m = re.search(r"\b([A-Z][a-zA-Z\-]{3,}(?:\s+[A-Z][a-zA-Z\-]{3,})?)\b", sent)
         if not m:
             continue

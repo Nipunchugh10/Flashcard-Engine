@@ -20,6 +20,8 @@ env/
 # Data / user uploads (do NOT commit)
 data/*.db
 data/*.db-journal
+data/*.db-shm
+data/*.db-wal
 uploads/*.pdf
 
 # Keep the folders themselves in the repo

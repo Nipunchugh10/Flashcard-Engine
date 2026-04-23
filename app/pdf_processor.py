@@ -46,8 +46,8 @@ _MULTI_NL_RE = re.compile(r"\n{3,}")
 def _clean_page(text: str) -> str:
     # collapse runs of spaces/tabs but preserve newlines
     text = _WS_RE.sub(" ", text)
-    # normalise hyphenation: "struc-\nture" -> "structure"
-    text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
+    # normalise hyphenation: "struc-\nture" -> "structure" (handle \r\n too)
+    text = re.sub(r"(\w)-\r?\n(\w)", r"\1\2", text)
     # strip trailing whitespace on each line
     lines = [ln.rstrip() for ln in text.split("\n")]
     return "\n".join(lines).strip()
