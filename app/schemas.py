@@ -43,6 +43,8 @@ class DeckOut(BaseModel):
     description: Optional[str]
     source_filename: Optional[str]
     source_pages: Optional[int]
+    generation_status: str = "ready"
+    generation_error: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     stats: DeckStats

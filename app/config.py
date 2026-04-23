@@ -53,8 +53,12 @@ def has_llm() -> bool:
 
 # --- Generation tuning -----------------------------------------------------
 MAX_CARDS_PER_CHUNK = int(os.getenv("MAX_CARDS_PER_CHUNK", "8"))
-CHUNK_TARGET_CHARS = int(os.getenv("CHUNK_TARGET_CHARS", "3500"))
-MAX_TOTAL_CARDS = int(os.getenv("MAX_TOTAL_CARDS", "80"))
+CHUNK_TARGET_CHARS = int(os.getenv("CHUNK_TARGET_CHARS", "3000"))
+MAX_TOTAL_CARDS = int(os.getenv("MAX_TOTAL_CARDS", "50"))
+
+# --- PDF limits (keep within Render free-tier resources) --------------------
+MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", "50"))
+MAX_PDF_SIZE_MB = int(os.getenv("MAX_PDF_SIZE_MB", "10"))
 
 # --- Auth -----------------------------------------------------------------
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me-in-production")

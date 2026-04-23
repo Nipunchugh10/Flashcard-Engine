@@ -16,15 +16,21 @@ parse defensively.
 """
 from __future__ import annotations
 
+import gc
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Optional
 
 from . import config
 
 logger = logging.getLogger(__name__)
+
+# How many LLM calls to run in parallel (keeps memory bounded while still
+# being faster than fully sequential processing).
+_LLM_CONCURRENCY = 3
 
 
 @dataclass
@@ -92,7 +98,7 @@ def _call_openai_compatible(
     response = client.chat.completions.create(
         model=model,
         temperature=0.3,
-        max_tokens=2000,
+        max_tokens=1500,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {
@@ -137,7 +143,7 @@ def _call_anthropic(chunk: str, max_cards: int) -> list[GeneratedCard]:
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
     response = client.messages.create(
         model=config.ANTHROPIC_MODEL,
-        max_tokens=2000,
+        max_tokens=1500,
         system=SYSTEM_PROMPT,
         messages=[
             {
@@ -294,39 +300,62 @@ def generate_cards_for_chunks(
     max_total: Optional[int] = None,
     progress_cb=None,
 ) -> list[GeneratedCard]:
-    """Generate cards across all chunks, deduping and capping the total."""
+    """Generate cards across all chunks, deduping and capping the total.
+
+    LLM calls are dispatched concurrently (up to _LLM_CONCURRENCY at a time)
+    to reduce wall-clock time while keeping memory and CPU bounded.
+    """
     if max_total is None:
         max_total = config.MAX_TOTAL_CARDS
 
     provider = config.active_provider()
-    logger.info("Generating cards using provider=%s", provider)
+    logger.info("Generating cards using provider=%s for %d chunks", provider, len(chunks))
 
     llm_fn = _PROVIDER_DISPATCH.get(provider)  # None for 'heuristic'
-
-    all_cards: list[GeneratedCard] = []
-    seen_fronts: set[str] = set()
 
     # Budget per chunk so we don't blow through max_total on the first chunk.
     per_chunk = max(3, min(config.MAX_CARDS_PER_CHUNK, max_total // max(1, len(chunks)) + 2))
 
-    for idx, chunk in enumerate(chunks, start=1):
+    # --- Heuristic path (no parallelism needed, pure CPU) ---
+    if llm_fn is None:
+        return _generate_sequential(chunks, _heuristic_cards, per_chunk, max_total, progress_cb)
+
+    # --- LLM path: concurrent calls ---
+    all_cards: list[GeneratedCard] = []
+    seen_fronts: set[str] = set()
+
+    def _process_chunk(idx_chunk: tuple[int, str]) -> tuple[int, list[GeneratedCard]]:
+        idx, chunk = idx_chunk
+        try:
+            cards = llm_fn(chunk, per_chunk)
+        except Exception as e:
+            logger.warning(
+                "Provider %s failed on chunk %d: %s. Using heuristic fallback.",
+                provider, idx, e,
+            )
+            cards = _heuristic_cards(chunk, per_chunk)
+        gc.collect()
+        return idx, cards
+
+    with ThreadPoolExecutor(max_workers=_LLM_CONCURRENCY) as pool:
+        futures = {
+            pool.submit(_process_chunk, (idx, chunk)): idx
+            for idx, chunk in enumerate(chunks, start=1)
+        }
+
+        # Collect in completion order but sort by idx to keep card ordering.
+        results: dict[int, list[GeneratedCard]] = {}
+        for future in as_completed(futures):
+            idx, cards = future.result()
+            results[idx] = cards
+            if progress_cb:
+                progress_cb(len(results), len(chunks), sum(len(c) for c in results.values()))
+
+    # Merge in original chunk order.
+    for idx in sorted(results.keys()):
         if len(all_cards) >= max_total:
             break
-
-        cards: list[GeneratedCard] = []
-        if llm_fn is not None:
-            try:
-                cards = llm_fn(chunk, per_chunk)
-            except Exception as e:
-                logger.warning(
-                    "Provider %s failed on chunk %d: %s. Using heuristic fallback for this chunk.",
-                    provider, idx, e,
-                )
-                cards = _heuristic_cards(chunk, per_chunk)
-        else:
-            cards = _heuristic_cards(chunk, per_chunk)
-
-        for c in cards:
+        for c in results[idx]:
             key = _normalise(c.front)
             if key in seen_fronts:
                 continue
@@ -335,9 +364,33 @@ def generate_cards_for_chunks(
             if len(all_cards) >= max_total:
                 break
 
+    return all_cards
+
+
+def _generate_sequential(
+    chunks: list[str],
+    gen_fn,
+    per_chunk: int,
+    max_total: int,
+    progress_cb=None,
+) -> list[GeneratedCard]:
+    """Sequential generation used for heuristic fallback."""
+    all_cards: list[GeneratedCard] = []
+    seen_fronts: set[str] = set()
+    for idx, chunk in enumerate(chunks, start=1):
+        if len(all_cards) >= max_total:
+            break
+        cards = gen_fn(chunk, per_chunk)
+        for c in cards:
+            key = _normalise(c.front)
+            if key in seen_fronts:
+                continue
+            seen_fronts.add(key)
+            all_cards.append(c)
+            if len(all_cards) >= max_total:
+                break
         if progress_cb:
             progress_cb(idx, len(chunks), len(all_cards))
-
     return all_cards
 
 

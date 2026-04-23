@@ -37,6 +37,9 @@ class Deck(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, default=None)
     source_filename: Mapped[Optional[str]] = mapped_column(String(500), default=None)
     source_pages: Mapped[Optional[int]] = mapped_column(Integer, default=None)
+    # Background processing state: "processing" | "ready" | "failed"
+    generation_status: Mapped[str] = mapped_column(String(20), default="ready")
+    generation_error: Mapped[Optional[str]] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow

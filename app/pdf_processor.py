@@ -16,16 +16,20 @@ the LLM to help it write higher-quality cards in context.
 """
 from __future__ import annotations
 
+import gc
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import fitz  # PyMuPDF
 
-from .config import CHUNK_TARGET_CHARS
+from .config import CHUNK_TARGET_CHARS, MAX_PDF_PAGES, MAX_TOTAL_CARDS
 
 MIN_CHUNK_CHARS = 300
 MAX_CHUNK_CHARS = int(CHUNK_TARGET_CHARS * 1.6)
+
+# Cap how many chunks we send to the LLM to keep processing bounded.
+MAX_CHUNKS = max(5, MAX_TOTAL_CARDS // 3)
 
 
 @dataclass
@@ -64,29 +68,47 @@ def _looks_like_header_footer(line: str, page_no: int) -> bool:
 
 
 def extract_pdf(path: Path | str) -> PDFExtract:
-    """Extract full text from a PDF, cleaned and concatenated."""
+    """Extract full text from a PDF, cleaned and concatenated.
+
+    Only the first MAX_PDF_PAGES pages are processed to keep memory and
+    CPU usage bounded on resource-constrained hosts.
+    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(path)
 
     doc = fitz.open(path)
+    total_pages = doc.page_count
+    pages_to_read = min(total_pages, MAX_PDF_PAGES)
+
     try:
         page_texts: list[str] = []
-        for page_no, page in enumerate(doc, start=1):
+        for page_no in range(pages_to_read):
+            page = doc.load_page(page_no)
             raw = page.get_text("text") or ""
             cleaned = _clean_page(raw)
             # remove likely running headers/footers
             filtered = "\n".join(
-                ln for ln in cleaned.split("\n") if not _looks_like_header_footer(ln, page_no)
+                ln for ln in cleaned.split("\n") if not _looks_like_header_footer(ln, page_no + 1)
             )
             if filtered.strip():
                 page_texts.append(filtered)
-        full = "\n\n".join(page_texts)
-        full = _MULTI_NL_RE.sub("\n\n", full).strip()
-        chunks = _chunk_text(full)
-        return PDFExtract(text=full, page_count=doc.page_count, chunks=chunks)
     finally:
         doc.close()
+        del doc
+        gc.collect()
+
+    full = "\n\n".join(page_texts)
+    del page_texts
+    full = _MULTI_NL_RE.sub("\n\n", full).strip()
+
+    chunks = _chunk_text(full)
+
+    # Cap chunks to avoid excessive LLM calls.
+    if len(chunks) > MAX_CHUNKS:
+        chunks = chunks[:MAX_CHUNKS]
+
+    return PDFExtract(text=full, page_count=total_pages, chunks=chunks)
 
 
 def _chunk_text(text: str) -> list[str]:
