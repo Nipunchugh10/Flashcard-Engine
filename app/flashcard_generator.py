@@ -312,8 +312,22 @@ def _heuristic_cards(chunk: str, max_cards: int) -> list[GeneratedCard]:
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Adaptive budget — scale card count to source size
 # ---------------------------------------------------------------------------
+
+# Roughly 1 flashcard per 250 characters of source text.  This keeps small
+# PDFs (e.g. a 2-page handout) from getting 40 mediocre cards, while large
+# textbooks still hit the hard ceiling.
+_CHARS_PER_CARD = 250
+_MIN_CARDS = 3
+
+
+def _estimate_card_budget(chunks: list[str], hard_max: int) -> int:
+    """Return an adaptive card cap based on how much text we actually have."""
+    total_chars = sum(len(c) for c in chunks)
+    estimated = max(_MIN_CARDS, total_chars // _CHARS_PER_CARD)
+    return min(estimated, hard_max)
+
 
 def generate_cards_for_chunks(
     chunks: list[str],
@@ -323,14 +337,20 @@ def generate_cards_for_chunks(
 ) -> list[GeneratedCard]:
     """Generate cards across all chunks, deduping and capping the total.
 
+    The hard ceiling is MAX_TOTAL_CARDS (default 40), but we adaptively
+    lower it for short documents so the card set stays high-quality.
+
     LLM calls are dispatched concurrently (up to _LLM_CONCURRENCY at a time)
     to reduce wall-clock time while keeping memory and CPU bounded.
     """
-    if max_total is None:
-        max_total = config.MAX_TOTAL_CARDS
+    hard_max = max_total if max_total is not None else config.MAX_TOTAL_CARDS
+    max_total = _estimate_card_budget(chunks, hard_max)
 
     provider = config.active_provider()
-    logger.info("Generating cards using provider=%s for %d chunks", provider, len(chunks))
+    logger.info(
+        "Generating cards using provider=%s for %d chunks (budget=%d)",
+        provider, len(chunks), max_total,
+    )
 
     llm_fn = _PROVIDER_DISPATCH.get(provider)  # None for 'heuristic'
 
