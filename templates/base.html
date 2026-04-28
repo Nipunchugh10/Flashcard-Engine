@@ -64,7 +64,6 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
           New deck
         </button>
-        {% if user %}
         <div class="flex items-center gap-3 ml-2 pl-4 border-l border-paper-300">
           <span class="text-ink-600 font-medium">{{ user.username }}</span>
           <form method="POST" action="/logout" class="inline">
@@ -73,7 +72,6 @@
             </button>
           </form>
         </div>
-        {% endif %}
         {% endif %}
       </nav>
     </div>
