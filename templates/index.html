@@ -115,4 +115,24 @@
 
 {% block scripts %}
 <script src="/static/js/upload.js"></script>
+{% set processing_ids = decks | selectattr('deck.generation_status', 'equalto', 'processing') | map(attribute='deck.id') | list %}
+{% if processing_ids %}
+<script>
+(function () {
+  const ids = {{ processing_ids | tojson }};
+  const timer = setInterval(async () => {
+    try {
+      const results = await Promise.all(
+        ids.map(id => fetch(`/api/decks/${id}/status`).then(r => r.ok ? r.json() : null))
+      );
+      const anyDone = results.some(d => d && d.generation_status !== 'processing');
+      if (anyDone) {
+        clearInterval(timer);
+        window.location.reload();
+      }
+    } catch (_) {}
+  }, 3000);
+})();
+</script>
+{% endif %}
 {% endblock %}

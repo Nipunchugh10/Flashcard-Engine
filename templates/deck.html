@@ -80,23 +80,23 @@
 <section class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-10">
   <div class="rounded-lg bg-paper-100 border border-paper-300 p-4">
     <div class="text-xs font-mono text-ink-500 uppercase tracking-wider">Total</div>
-    <div class="font-display text-3xl font-semibold mt-1">{{ stats.total }}</div>
+    <div class="font-display text-3xl font-semibold mt-1" x-text="deckStats.total"></div>
   </div>
   <div class="rounded-lg bg-paper-100 border border-paper-300 p-4">
     <div class="text-xs font-mono text-ink-500 uppercase tracking-wider">Due now</div>
-    <div class="font-display text-3xl font-semibold mt-1 {{ 'text-ember-600' if stats.due_now > 0 else '' }}">{{ stats.due_now }}</div>
+    <div class="font-display text-3xl font-semibold mt-1" :class="deckStats.due_now > 0 ? 'text-ember-600' : ''" x-text="deckStats.due_now"></div>
   </div>
   <div class="rounded-lg bg-paper-100 border border-paper-300 p-4">
     <div class="text-xs font-mono text-ink-500 uppercase tracking-wider">New</div>
-    <div class="font-display text-3xl font-semibold mt-1">{{ stats.new }}</div>
+    <div class="font-display text-3xl font-semibold mt-1" x-text="deckStats.new"></div>
   </div>
   <div class="rounded-lg bg-paper-100 border border-paper-300 p-4">
     <div class="text-xs font-mono text-ink-500 uppercase tracking-wider">Review</div>
-    <div class="font-display text-3xl font-semibold mt-1">{{ stats.review }}</div>
+    <div class="font-display text-3xl font-semibold mt-1" x-text="deckStats.review"></div>
   </div>
   <div class="rounded-lg bg-moss-500/10 border border-moss-500/30 p-4">
     <div class="text-xs font-mono text-moss-600 uppercase tracking-wider">Mastered</div>
-    <div class="font-display text-3xl font-semibold mt-1 text-moss-600">{{ stats.mastered }}</div>
+    <div class="font-display text-3xl font-semibold mt-1 text-moss-600" x-text="deckStats.mastered"></div>
   </div>
 </section>
 
@@ -180,6 +180,14 @@ function deckPage(deckId, generationStatus) {
     generationStatus,
     generationDetail: 'Reading PDF and writing flashcards…',
     generationError: '',
+    deckStats: {
+      total:    {{ stats.total }},
+      new:      {{ stats.new }},
+      learning: {{ stats.learning }},
+      review:   {{ stats.review }},
+      mastered: {{ stats.mastered }},
+      due_now:  {{ stats.due_now }},
+    },
     cards: [],
     loading: true,
     search: '',
@@ -202,7 +210,7 @@ function deckPage(deckId, generationStatus) {
     init() {
       if (this.generationStatus === 'processing') {
         // Deck is still being generated — start polling and show overlay.
-        // Cards are loaded only after a full page reload when status is ready.
+        // Cards are loaded in-place once polling detects status="ready".
         this.loading = false;
         this._startPolling();
       } else {
@@ -229,9 +237,12 @@ function deckPage(deckId, generationStatus) {
 
           if (data.generation_status === 'ready') {
             clearInterval(this._pollTimer);
-            // Full page reload: the server re-renders the template with the
-            // correct card count in the stats strip and all cards visible.
-            window.location.reload();
+            // Update stats and load cards in-place — no page reload needed.
+            // This avoids browser cache serving the old "processing" page.
+            if (data.stats) this.deckStats = data.stats;
+            this.loading = true;
+            this.generationStatus = 'ready';
+            await this.loadCards();
 
           } else if (data.generation_status === 'failed') {
             clearInterval(this._pollTimer);
