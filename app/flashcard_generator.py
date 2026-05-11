@@ -315,36 +315,56 @@ def _heuristic_cards(chunk: str, max_cards: int) -> list[GeneratedCard]:
 # Adaptive budget — scale card count to source size
 # ---------------------------------------------------------------------------
 
-# Roughly 1 flashcard per 250 characters of source text.  This keeps small
-# PDFs (e.g. a 2-page handout) from getting 40 mediocre cards, while large
-# textbooks still hit the hard ceiling.
+# Secondary safety: roughly 1 flashcard per 250 characters of source text.
+# This prevents generating cards from nearly-empty or image-only pages.
 _CHARS_PER_CARD = 250
 _MIN_CARDS = 3
 
 
-def _estimate_card_budget(chunks: list[str], hard_max: int) -> int:
-    """Return an adaptive card cap based on how much text we actually have."""
+def _estimate_card_budget(chunks: list[str], hard_max: int, pages_read: int = 0) -> int:
+    """Return an adaptive card cap based on page count and character volume.
+
+    Primary signal: linear page-based scaling.
+        pages_read / MAX_PDF_PAGES * hard_max
+        e.g. 50 pages → 35 cards, 100 pages → 70 cards.
+
+    Secondary signal: character-based estimate as an upper-safety check so
+    that very sparse/image-heavy PDFs don't receive more cards than the
+    actual text content justifies.
+    """
     total_chars = sum(len(c) for c in chunks)
-    estimated = max(_MIN_CARDS, total_chars // _CHARS_PER_CARD)
-    return min(estimated, hard_max)
+    char_budget = max(_MIN_CARDS, total_chars // _CHARS_PER_CARD)
+
+    if pages_read > 0:
+        page_budget = max(_MIN_CARDS, round(pages_read * hard_max / config.MAX_PDF_PAGES))
+        # Use the lower of the two estimates so sparse pages don't over-produce.
+        return min(page_budget, char_budget, hard_max)
+
+    # Fallback when page count is unavailable (legacy callers).
+    return min(char_budget, hard_max)
 
 
 def generate_cards_for_chunks(
     chunks: list[str],
     *,
     max_total: Optional[int] = None,
+    pages_read: int = 0,
     progress_cb=None,
 ) -> list[GeneratedCard]:
     """Generate cards across all chunks, deduping and capping the total.
 
-    The hard ceiling is MAX_TOTAL_CARDS (default 40), but we adaptively
-    lower it for short documents so the card set stays high-quality.
+    The hard ceiling is MAX_TOTAL_CARDS (default 70), but the budget is
+    adaptively lowered based on the number of pages actually processed so
+    that small PDFs don't receive mediocre filler cards.
+
+    Pass ``pages_read`` (the number of PDF pages that were extracted) for
+    accurate page-proportional scaling (1–100 pages → 3–70 cards).
 
     LLM calls are dispatched concurrently (up to _LLM_CONCURRENCY at a time)
     to reduce wall-clock time while keeping memory and CPU bounded.
     """
     hard_max = max_total if max_total is not None else config.MAX_TOTAL_CARDS
-    max_total = _estimate_card_budget(chunks, hard_max)
+    max_total = _estimate_card_budget(chunks, hard_max, pages_read=pages_read)
 
     provider = config.active_provider()
     logger.info(

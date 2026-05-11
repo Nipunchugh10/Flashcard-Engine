@@ -207,7 +207,7 @@ def _process_deck_background(deck_id: int, pdf_path: Path) -> None:
 
         # --- Step 2: Generate ---
         try:
-            generated = generate_cards_for_chunks(extract.chunks)
+            generated = generate_cards_for_chunks(extract.chunks, pages_read=extract.pages_read)
         except Exception as e:
             logger.exception("Background: Card generation failed for deck %d", deck_id)
             deck.generation_status = "failed"

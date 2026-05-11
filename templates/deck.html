@@ -13,15 +13,31 @@
     <div class="flex justify-center mb-6">
       <div class="relative w-14 h-14">
         <div class="absolute inset-0 rounded-full border-2 border-paper-300"></div>
-        <div class="absolute inset-0 rounded-full border-2 border-ember-500 border-r-transparent animate-spin"></div>
+        <div class="absolute inset-0 rounded-full border-2 border-ember-500 border-r-transparent animate-spin"
+             x-show="!generationDone"></div>
+        <!-- Checkmark shown when done, before reload -->
+        <div x-show="generationDone" class="absolute inset-0 flex items-center justify-center">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+               class="w-7 h-7 text-moss-600">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+          </svg>
+        </div>
       </div>
     </div>
-    <h2 class="font-display text-2xl font-semibold tracking-tight">Building your deck</h2>
+    <h2 class="font-display text-2xl font-semibold tracking-tight"
+        x-text="generationDone ? 'Cards are ready!' : 'Building your deck'"></h2>
     <p class="mt-2 text-ink-500 text-sm" x-text="generationDetail">Reading PDF and writing flashcards…</p>
     <div class="mt-6 w-full h-1.5 bg-paper-200 rounded-full overflow-hidden">
-      <div class="h-full bg-ember-500 animate-pulse" style="width: 60%"></div>
+      <div class="h-full bg-ember-500 transition-all duration-500"
+           :class="generationDone ? 'w-full bg-moss-500' : 'animate-pulse'" style="width: 60%"></div>
     </div>
-    <p class="mt-4 text-xs text-ink-400">This page will update automatically when cards are ready.</p>
+    <p class="mt-4 text-xs text-ink-400"
+       x-text="generationDone ? 'Loading your flashcards…' : 'This page will update automatically when cards are ready.'"></p>
+    <!-- Manual escape hatch — always visible so user is never fully stuck -->
+    <button onclick="window.location.reload()"
+            class="mt-5 text-xs text-ink-400 underline underline-offset-2 hover:text-ember-600 transition-colors">
+      Taking too long? Click to refresh
+    </button>
   </div>
 </div>
 
@@ -179,6 +195,7 @@ function deckPage(deckId, generationStatus) {
     deckId,
     generationStatus,
     generationDetail: 'Reading PDF and writing flashcards…',
+    generationDone: false,
     generationError: '',
     deckStats: {
       total:    {{ stats.total }},
@@ -237,23 +254,23 @@ function deckPage(deckId, generationStatus) {
 
           if (data.generation_status === 'ready') {
             clearInterval(this._pollTimer);
-            // Update stats and load cards in-place — no page reload needed.
-            // This avoids browser cache serving the old "processing" page.
-            if (data.stats) this.deckStats = data.stats;
-            this.loading = true;
-            this.generationStatus = 'ready';
-            await this.loadCards();
+            // Show a "done" state in the overlay for a moment, then reload
+            // the page. A full reload is the most reliable way to render the
+            // freshly-generated deck — no Alpine reactivity edge cases.
+            this.generationDone = true;
+            this.generationDetail = 'Flashcards generated! Opening your deck…';
+            setTimeout(() => window.location.reload(), 900);
 
           } else if (data.generation_status === 'failed') {
             clearInterval(this._pollTimer);
             this.generationStatus = 'failed';
             this.generationError = data.generation_error || 'Card generation failed.';
 
-          } else if (this._pollTick > 90) {
-            // 90 × 2 s = 3 min — give up
+          } else if (this._pollTick > 150) {
+            // 150 × 2 s = 5 min — give up (raised from 3 min for large PDFs)
             clearInterval(this._pollTimer);
             this.generationStatus = 'failed';
-            this.generationError = 'Generation is taking too long. Try a smaller PDF.';
+            this.generationError = 'Generation is taking too long. Please refresh the page.';
           }
         } catch (_) { /* network hiccup — keep polling */ }
       }, 2000);

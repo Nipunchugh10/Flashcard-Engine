@@ -77,12 +77,27 @@ These keep the app stable on free-tier hosting. All configurable via environment
 | Limit | Default | Env variable |
 |---|---|---|
 | Max PDF file size | 10 MB | `MAX_PDF_SIZE_MB` |
-| Max pages processed | 50 | `MAX_PDF_PAGES` |
-| Max cards per PDF | 50 | `MAX_TOTAL_CARDS` |
+| Max pages processed | **100** | `MAX_PDF_PAGES` |
+| Max cards per PDF | **70** | `MAX_TOTAL_CARDS` |
 | Cards per chunk | 8 | `MAX_CARDS_PER_CHUNK` |
-| Chunk size (chars) | 3000 | `CHUNK_TARGET_CHARS` |
+| Chunk size (chars) | 3500 | `CHUNK_TARGET_CHARS` |
 
-PDFs larger than 50 pages will have only the first 50 pages processed. Upload files are cleaned up after processing.
+PDFs longer than 100 pages will have only the first 100 pages processed. Upload files are cleaned up after processing.
+
+### Adaptive card scaling
+
+The number of flashcards generated scales linearly with how many pages were actually processed — so a short handout doesn't get flooded with mediocre cards and a 100-page textbook hits the full 70-card ceiling:
+
+| Pages in PDF | Cards generated (approx.) |
+|---|---|
+| 1–5 | 3–4 |
+| 10 | 7 |
+| 20 | 14 |
+| 50 | 35 |
+| 75 | 52 |
+| 100+ | 70 (maximum) |
+
+A secondary character-volume check prevents very sparse / image-heavy PDFs from inflating the count beyond what the actual text content justifies.
 
 ---
 
@@ -90,11 +105,12 @@ PDFs larger than 50 pages will have only the first 50 pages processed. Upload fi
 
 1. **Upload** — your PDF is saved and a deck is created instantly in "processing" state.
 2. **Background thread** — PDF text extraction and LLM calls happen asynchronously, so you're never blocked.
-3. **Concurrent API calls** — up to 3 LLM calls run in parallel for speed.
-4. **Polling** — the frontend checks status every 2 seconds and shows real progress.
-5. **Completion** — once ready, you're automatically redirected to your new deck.
+3. **Adaptive budget** — the card target is calculated from the number of pages processed (linear 1–100 pages → 3–70 cards) and capped by actual text volume.
+4. **Concurrent API calls** — up to 3 LLM calls run in parallel for speed.
+5. **Polling** — the frontend checks status every 2 seconds. The spinner shows animated progress messages while waiting.
+6. **Completion** — when cards are ready, the spinner switches to a green checkmark and the page auto-reloads to show your deck — no manual refresh needed. A "Taking too long? Click to refresh" link is always visible as a fallback.
 
-If anything fails (bad PDF, rate limit, network issue), the deck shows a clear error message. Individual chunk failures fall back to the heuristic generator so you still get partial results.
+If anything fails (bad PDF, rate limit, network issue), the deck shows a clear error message. Individual chunk failures fall back to the heuristic generator so you still get partial results. The polling timeout is 5 minutes (raised from 3) to accommodate large PDFs.
 
 ---
 

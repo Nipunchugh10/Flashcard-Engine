@@ -35,7 +35,8 @@ MAX_CHUNKS = max(5, MAX_TOTAL_CARDS // 3)
 @dataclass
 class PDFExtract:
     text: str
-    page_count: int
+    page_count: int   # total pages in the PDF
+    pages_read: int   # pages actually processed (capped at MAX_PDF_PAGES)
     chunks: list[str]
 
 
@@ -108,7 +109,7 @@ def extract_pdf(path: Path | str) -> PDFExtract:
     if len(chunks) > MAX_CHUNKS:
         chunks = chunks[:MAX_CHUNKS]
 
-    return PDFExtract(text=full, page_count=total_pages, chunks=chunks)
+    return PDFExtract(text=full, page_count=total_pages, pages_read=pages_to_read, chunks=chunks)
 
 
 def _chunk_text(text: str) -> list[str]:

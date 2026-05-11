@@ -25,8 +25,9 @@ The core value proposition of the app is its automated PDF-to-Flashcard pipeline
 
 ### Step B: Extraction & Chunking
 1.  **Background Thread Activation:** A background task picks up the newly created Deck.
-2.  **Text Extraction:** `PyMuPDF` reads the document text. The system limits processing to a configurable maximum number of pages (default: 50) to manage resource usage.
-3.  **Intelligent Chunking:** The extracted text is split into paragraph-aligned chunks (targeting ~3000 characters). This ensures that each chunk sent to the LLM is contextually coherent and fits comfortably within token limits.
+2.  **Text Extraction:** `PyMuPDF` reads the document text. The system limits processing to a configurable maximum number of pages (default: **100**) to manage resource usage. PDFs longer than 100 pages have only their first 100 pages processed; the total page count is recorded separately.
+3.  **Intelligent Chunking:** The extracted text is split into paragraph-aligned chunks (targeting ~3500 characters). This ensures that each chunk sent to the LLM is contextually coherent and fits comfortably within token limits.
+4.  **Adaptive Card Budget:** Before any LLM call is made, the total card budget is calculated from the number of pages actually read (linear scale: 1–100 pages → 3–70 cards). A secondary character-volume check acts as a safety cap to avoid over-generating cards from image-heavy or sparse PDFs.
 
 ### Step C: AI Flashcard Generation
 1.  **Concurrent Processing:** The chunks are processed via a `ThreadPoolExecutor` (up to 3 parallel requests) to minimize generation time.
@@ -90,7 +91,7 @@ The frontend is designed for rapid delivery and minimal client-side overhead.
 
 ### Frontend Pipeline & Behaviors
 *   **Server-Rendered Pages:** Pages like the dashboard, deck list, and settings are rendered completely on the server.
-*   **AJAX Polling:** During PDF generation, the frontend uses simple JavaScript `setInterval` logic to poll `/api/decks/{id}/status` every 2 seconds, updating a progress bar until completion or failure.
+*   **AJAX Polling:** During PDF generation, the frontend uses `setInterval` to poll `/api/decks/{id}/status` every 2 seconds. When the backend reports `status=ready`, the spinner transitions to a green checkmark and `window.location.reload()` fires automatically — no manual page refresh needed. A manual "Taking too long? Click to refresh" button is always visible as a fallback. The polling timeout is 5 minutes (150 ticks × 2 s) to handle large PDFs.
 *   **Study Mode Interactivity:** The study interface relies on AJAX to fetch the next card and submit ratings to provide a seamless, non-reloading experience.
 *   **Keyboard Accessibility:** Custom JavaScript listeners capture keyboard events (e.g., `Space` to flip, `1-4` to rate) to optimize the study flow without requiring trackpad interaction.
 
@@ -479,11 +480,12 @@ class GeneratedCard:
 @dataclass
 class PDFExtract:
     text: str
-    page_count: int
+    page_count: int   # total pages in the PDF (including unprocessed ones)
+    pages_read: int   # pages actually extracted (capped at MAX_PDF_PAGES = 100)
     chunks: list[str]
 ```
 
-`PDFExtract` is the return value of `extract_pdf()`. It bundles three related pieces of information (full text, page count, chunk list) into a single typed object. The background worker in `api_decks.py` accesses `extract.chunks` and `extract.page_count` directly.
+`PDFExtract` is the return value of `extract_pdf()`. It bundles four related pieces of information into a single typed object. `page_count` records the original PDF length; `pages_read` is the actual number of pages processed (at most 100). The background worker in `api_decks.py` passes `extract.pages_read` to `generate_cards_for_chunks()` so the adaptive budget can scale the card count proportionally.
 
 #### `app/spaced_repetition.py` — `SRSState`
 
@@ -785,13 +787,24 @@ This is a **first-fit decreasing** variant of the bin-packing problem. Paragraph
 _CHARS_PER_CARD = 250
 _MIN_CARDS = 3
 
-def _estimate_card_budget(chunks: list[str], hard_max: int) -> int:
+def _estimate_card_budget(chunks: list[str], hard_max: int, pages_read: int = 0) -> int:
     total_chars = sum(len(c) for c in chunks)
-    estimated = max(_MIN_CARDS, total_chars // _CHARS_PER_CARD)
-    return min(estimated, hard_max)
+    char_budget = max(_MIN_CARDS, total_chars // _CHARS_PER_CARD)
+
+    if pages_read > 0:
+        # Primary: linear page-based scaling (1–100 pages → 3–70 cards)
+        page_budget = max(_MIN_CARDS, round(pages_read * hard_max / config.MAX_PDF_PAGES))
+        # Take the lower of the two: page count is the guide, chars prevent
+        # inflating the count for very sparse / image-heavy pages.
+        return min(page_budget, char_budget, hard_max)
+
+    return min(char_budget, hard_max)  # fallback when page count unavailable
 ```
 
-The budget algorithm greedily estimates the optimal number of cards based on text volume — roughly 1 card per 250 characters. It clamps between a minimum (3) and a hard maximum (40). This avoids over-generating cards for short PDFs or under-generating for long ones.
+The budget algorithm uses two signals greedily combined:
+1. **Primary (page-based):** `pages_read / MAX_PDF_PAGES × hard_max` — a linear scale from 3 cards (1 page) to 70 cards (100 pages).
+2. **Secondary (char-based):** roughly 1 card per 250 characters of extracted text — prevents inflating the count for image-heavy or sparse PDFs.
+The function returns the minimum of both signals, clamped to `[_MIN_CARDS, hard_max]`. This avoids both over-generating cards for short PDFs and under-generating for long, dense ones.
 
 #### `app/flashcard_generator.py` — Per-Chunk Budget Distribution
 
