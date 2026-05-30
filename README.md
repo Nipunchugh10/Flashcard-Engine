@@ -1,6 +1,6 @@
 # Recall — The Flashcard Engine
 
-Drop in a PDF. Get back a practice-ready deck with spaced repetition. Built for the AI Builder Build Challenge (Problem 1).
+Drop in a PDF. Get back a practice-ready deck with spaced repetition.
 
 ---
 
