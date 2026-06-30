@@ -1,3 +1,12 @@
+---
+title: Recall Flashcard Engine
+emoji: 📇
+colorFrom: purple
+colorTo: indigo
+sdk: docker
+app_port: 7860
+---
+
 # Recall — The Flashcard Engine
 
 Drop in a PDF. Get back a practice-ready deck with spaced repetition.
