@@ -21,11 +21,8 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # --- LLM providers ---------------------------------------------------------
-# We support three providers. The first one with a key set wins.
-# Order: explicit LLM_PROVIDER env var > Groq > Gemini > Anthropic > heuristic.
-
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+# We support two providers. The first one with a key set wins.
+# Order: explicit LLM_PROVIDER env var > Gemini > Anthropic > heuristic.
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
@@ -33,7 +30,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620")
 
-# Optional override. Values: groq | gemini | anthropic | heuristic
+# Optional override. Values: gemini | anthropic | heuristic
 LLM_PROVIDER_OVERRIDE = os.getenv("LLM_PROVIDER", "").strip().lower() or None
 
 
@@ -41,8 +38,6 @@ def active_provider() -> str:
     """Return which provider the app should use right now."""
     if LLM_PROVIDER_OVERRIDE:
         return LLM_PROVIDER_OVERRIDE
-    if GROQ_API_KEY:
-        return "groq"
     if GEMINI_API_KEY:
         return "gemini"
     if ANTHROPIC_API_KEY:

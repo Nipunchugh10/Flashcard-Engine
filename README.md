@@ -27,13 +27,12 @@ Deployed on [Render.com](https://render.com). PDF processing runs in the backgro
 
 | Provider | Cost | Free tier | Where to get a key |
 |---|---|---|---|
-| **Groq** *(recommended)* | Free, no credit card | 30 req/min, 14,400 req/day, Llama 3.3 70B | [console.groq.com](https://console.groq.com) |
-| **Google Gemini** | Free, no credit card | 15 req/min, 1,000 req/day, Gemini 2.5 Flash | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
+| **Google Gemini** *(recommended)* | Free, no credit card | 15 req/min, 1,000 req/day, Gemini 1.5 Flash | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
 | **Anthropic Claude** | Paid | — | [console.anthropic.com](https://console.anthropic.com) |
 
-**Groq is recommended** — fastest, highest free-tier limits, no credit card needed.
+**Google Gemini is recommended** — generous free-tier limits, no credit card needed.
 
-Priority order when multiple keys are set: **Groq > Gemini > Anthropic > heuristic**. Override with `LLM_PROVIDER=gemini` etc.
+Priority order: **Gemini > Anthropic > heuristic**. Override with `LLM_PROVIDER=anthropic` etc.
 
 ---
 
@@ -55,7 +54,7 @@ pip install -r requirements.txt
 # 4. Configure
 cp .env.example .env
 #    Open .env and paste your API key (see table above).
-#    At minimum, set GROQ_API_KEY or GEMINI_API_KEY.
+#    At minimum, set GEMINI_API_KEY.
 #    Also change SECRET_KEY to something random for production.
 
 # 5. Run
@@ -120,9 +119,9 @@ If anything fails (bad PDF, rate limit, network issue), the deck shows a clear e
 2. Create a new **Web Service** on [render.com](https://render.com).
 3. Connect your GitHub repo.
 4. Set these environment variables in Render's dashboard:
-   - `GROQ_API_KEY` (or `GEMINI_API_KEY`) — your LLM API key
-   - `SECRET_KEY` — a random string for session security
-   - `DATABASE_URL` — leave blank for SQLite, or use a Postgres URL
+    - `GEMINI_API_KEY` — your LLM API key
+    - `SECRET_KEY` — a random string for session security
+    - `DATABASE_URL` — leave blank for SQLite, or use a Postgres URL
 5. Set the **Build Command**: `pip install -r requirements.txt`
 6. Set the **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 7. Deploy! The database tables and migrations are created automatically on startup.
@@ -135,7 +134,7 @@ If anything fails (bad PDF, rate limit, network issue), the deck shows a clear e
 
 - **Python 3.12**, **FastAPI**, **SQLAlchemy 2.x**, **SQLite**
 - **PyMuPDF** for PDF text extraction
-- **OpenAI SDK** — drives both Groq and Gemini via their OpenAI-compatible endpoints
+- **OpenAI SDK** — drives Gemini via its OpenAI-compatible endpoint
 - **Anthropic SDK** — optional, for Claude
 - **Jinja2 + Tailwind (CDN) + Alpine.js** for the frontend — server-rendered pages, AJAX only for study interactions
 - **bcrypt + itsdangerous** for authentication & sessions
@@ -157,7 +156,7 @@ flashcard-engine/
 │   ├── auth.py                    login / signup / session management
 │   ├── stats.py                   deck aggregation
 │   ├── pdf_processor.py           extraction + chunking (page-limited)
-│   ├── flashcard_generator.py     Groq / Gemini / Anthropic / heuristic (concurrent)
+│   ├── flashcard_generator.py     Gemini / Anthropic / heuristic (concurrent)
 │   ├── spaced_repetition.py       SM-2 algorithm
 │   └── routes/
 │       ├── pages.py               HTML pages
@@ -189,7 +188,7 @@ flashcard-engine/
 
 **Chunk before prompting, don't concatenate.** I split the PDF into ~3000-character paragraph-aligned chunks and call the LLM once per chunk. This keeps each prompt focused, lets the model cover more of the document, and stays well inside safe context windows. I also dedupe cards across chunks on a normalised-front basis.
 
-**Pluggable LLM providers.** The app supports Groq, Gemini, and Anthropic behind a single interface. Since Groq and Gemini both expose OpenAI-compatible endpoints, the same `openai` SDK drives both — I just swap the base URL and model name. This means anyone running the project can use a free provider without code changes.
+**Pluggable LLM providers.** The app supports Gemini and Anthropic behind a single interface. Since Gemini exposes an OpenAI-compatible endpoint, the `openai` SDK drives it — we just configure the base URL and model name. This means anyone running the project can use a free provider without code changes.
 
 **Strict JSON output + defensive parsing.** The system prompt asks for a bare JSON array and forbids markdown fences. The parser strips fences anyway, searches for the array if stray prose slipped in, and tolerates per-item type coercion. If one chunk's output fails to parse, the others still succeed.
 

@@ -23,7 +23,6 @@ async def lifespan(app: FastAPI):
     init_db()
     provider = config.active_provider()
     model_label = {
-        "groq": config.GROQ_MODEL,
         "gemini": config.GEMINI_MODEL,
         "anthropic": config.ANTHROPIC_MODEL,
         "heuristic": "regex fallback",

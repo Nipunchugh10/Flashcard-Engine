@@ -2,13 +2,12 @@
 Flashcard generator with pluggable LLM providers.
 
 Priority of providers (auto-detected from env):
-    1. Groq       (OpenAI-compatible endpoint, free tier, Llama 3.3 70B)
-    2. Gemini     (OpenAI-compatible endpoint, free tier, Gemini 2.5 Flash)
-    3. Anthropic  (paid, Claude)
-    4. Heuristic  (fully offline regex-based fallback)
+    1. Gemini     (OpenAI-compatible endpoint, free tier, Gemini 1.5/2.5 Flash)
+    2. Anthropic  (paid, Claude)
+    3. Heuristic  (fully offline regex-based fallback)
 
-Groq and Gemini both expose OpenAI-compatible chat completion APIs, so the
-same `openai` Python SDK drives both -- we just swap the base_url, key, and
+Gemini exposes an OpenAI-compatible chat completion API, so the
+`openai` Python SDK drives it -- we just configure the base_url, key, and
 model name. The Anthropic path uses the official `anthropic` SDK.
 
 Every provider gets the same prompt and returns strict JSON, which we then
@@ -88,7 +87,7 @@ def _call_openai_compatible(
     model: str,
     provider_name: str,
 ) -> list[GeneratedCard]:
-    """Shared implementation for Groq and Gemini (both OpenAI-compatible)."""
+    """Implementation for Gemini (OpenAI-compatible)."""
     try:
         from openai import OpenAI
     except ImportError as e:
@@ -114,17 +113,6 @@ def _call_openai_compatible(
     text = (response.choices[0].message.content or "").strip()
     logger.debug("[%s] raw output length=%d", provider_name, len(text))
     return _parse_cards(text, chunk)
-
-
-def _call_groq(chunk: str, max_cards: int) -> list[GeneratedCard]:
-    return _call_openai_compatible(
-        chunk,
-        max_cards,
-        api_key=config.GROQ_API_KEY,
-        base_url="https://api.groq.com/openai/v1",
-        model=config.GROQ_MODEL,
-        provider_name="groq",
-    )
 
 
 def _call_gemini(chunk: str, max_cards: int) -> list[GeneratedCard]:
@@ -163,7 +151,6 @@ def _call_anthropic(chunk: str, max_cards: int) -> list[GeneratedCard]:
 
 
 _PROVIDER_DISPATCH = {
-    "groq": _call_groq,
     "gemini": _call_gemini,
     "anthropic": _call_anthropic,
 }
