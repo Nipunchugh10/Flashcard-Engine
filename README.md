@@ -15,7 +15,7 @@ Drop in a PDF. Get back a practice-ready deck with spaced repetition.
 
 ## ⚡ Live Demo
 
-Deployed on [Render.com](https://render.com). PDF processing runs in the background so the free tier handles it without crashing.
+Deployed on [Hugging Face Spaces](https://huggingface.co/spaces). PDF processing runs in a containerized environment with dedicated RAM so it handles large files quickly.
 
 ---
 
@@ -122,26 +122,28 @@ If anything fails (bad PDF, rate limit, network issue), the deck shows a clear e
 
 ---
 
-## Deploying to Render
+## Deploying to Hugging Face Spaces
 
-1. Push this repo to GitHub.
-2. Create a new **Web Service** on [render.com](https://render.com).
-3. Connect your GitHub repo.
-4. Set these environment variables in Render's dashboard:
-    - `GEMINI_API_KEY` — your LLM API key
-    - `SECRET_KEY` — a random string for session security
-    - `DATABASE_URL` — leave blank for SQLite, or use a Postgres URL
-5. Set the **Build Command**: `pip install -r requirements.txt`
-6. Set the **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-7. Deploy! The database tables and migrations are created automatically on startup.
-
-> **Tip:** Render's free tier has 512 MB RAM. The background processing system and resource limits are specifically designed to work within this constraint.
+1. Create a new **Space** on [huggingface.co](https://huggingface.co).
+2. Set the **SDK** to **Docker** (leave the "Blank" template selected).
+3. Go to the **Settings** tab of your Space and add these environment secrets:
+   - `GEMINI_API_KEY` — your Gemini API key from Google AI Studio.
+   - `LLM_PROVIDER` — set to `gemini`.
+   - `DATABASE_URL` — your persistent PostgreSQL connection URL (e.g., from Neon.tech).
+   - `SECRET_KEY` — a random string for session security.
+4. Link your local project to Hugging Face and push:
+   ```bash
+   git remote add hf https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
+   git push hf main
+   ```
+5. Hugging Face will automatically build the container and deploy the app. Tables and migrations are initialized on startup.
 
 ---
 
 ## Stack
 
-- **Python 3.12**, **FastAPI**, **SQLAlchemy 2.x**, **SQLite**
+- **Python 3.11/3.12**, **FastAPI**, **SQLAlchemy 2.x**, **PostgreSQL / SQLite**
+- **Docker** for containerized deployments
 - **PyMuPDF** for PDF text extraction
 - **OpenAI SDK** — drives Gemini via its OpenAI-compatible endpoint
 - **Anthropic SDK** — optional, for Claude
