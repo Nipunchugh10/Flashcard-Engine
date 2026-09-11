@@ -61,9 +61,10 @@ are reinstalled automatically whenever `requirements.txt` changes.
 Then open <http://localhost:8000>, create an account, and upload a PDF.
 
 ```bash
-./run.sh          # start the dev server (auto-reload)
-./run.sh test     # run the 19 end-to-end smoke tests
-PORT=3000 ./run.sh   # serve on a different port
+./run.sh            # start the dev server (auto-reload)
+./run.sh test       # 19 end-to-end smoke tests
+./run.sh security   # 45 adversarial security tests
+PORT=3000 ./run.sh  # serve on a different port
 ```
 
 **Add your API key.** Until you put a `GEMINI_API_KEY` in `.env`, the app runs in offline
@@ -191,7 +192,8 @@ flashcard-engine/
 │   ├── database.py                SQLAlchemy session + migrations
 │   ├── models.py                  User / Deck / Card / ReviewLog
 │   ├── schemas.py                 Pydantic DTOs
-│   ├── auth.py                    login / signup / session management
+│   ├── auth.py                    password hashing, session tokens, deps
+│   ├── security.py                rate limiting + response headers
 │   ├── stats.py                   deck aggregation
 │   ├── pdf_processor.py           extraction + chunking (page-limited)
 │   ├── flashcard_generator.py     Gemini / Anthropic / heuristic (concurrent)
@@ -216,6 +218,7 @@ flashcard-engine/
 ├── data/                          SQLite DB (gitignored)
 ├── uploads/                       raw PDFs (gitignored)
 ├── smoke_test.py                  end-to-end tests
+├── security_test.py               adversarial security tests
 ├── requirements.txt
 ├── .env.example
 └── run.sh

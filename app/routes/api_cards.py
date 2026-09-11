@@ -17,7 +17,8 @@ def _verify_card_ownership(card: models.Card, user: models.User, db: Session) ->
     """Verify that the card's deck belongs to the user."""
     deck = db.get(models.Deck, card.deck_id)
     if not deck or deck.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        # 404, not 403 — a 403 would confirm the card id exists.
+        raise HTTPException(status_code=404, detail="Card not found")
 
 
 @router.get("", response_model=list[CardOut])
@@ -31,7 +32,7 @@ def list_cards(
     # Verify deck belongs to user
     deck = db.get(models.Deck, deck_id)
     if not deck or deck.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=404, detail="Deck not found")
 
     stmt = select(models.Card).where(models.Card.deck_id == deck_id)
     if search:

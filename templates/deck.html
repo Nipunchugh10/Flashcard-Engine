@@ -4,7 +4,7 @@
 
 {% block content %}
 
-<div x-data="deckPage({{ deck.id }}, '{{ deck.generation_status }}')" x-init="init()">
+<div x-data='deckPage({{ deck.id }}, {{ deck.generation_status|tojson }})' x-init="init()">
 
 <!-- Generation-in-progress overlay -->
 <div x-show="generationStatus === 'processing'" x-cloak
@@ -75,7 +75,7 @@
     </div>
 
     <div class="flex items-center gap-2">
-      <button type="button" @click="editingName = true; newName = '{{ deck.name|e }}'"
+      <button type="button" @click='editingName = true; newName = {{ deck.name|tojson }}'
         class="px-3 py-2 text-sm text-ink-600 hover:text-ember-600 transition-colors" x-show="!editingName">
         Rename
       </button>

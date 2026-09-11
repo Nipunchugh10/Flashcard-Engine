@@ -63,10 +63,9 @@ def deck_page(deck_id: int, request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/login", status_code=302)
 
     deck = db.get(models.Deck, deck_id)
-    if not deck:
+    if not deck or deck.user_id != user.id:
+        # 404 rather than 403 so the page cannot confirm the deck exists.
         raise HTTPException(status_code=404, detail="Deck not found")
-    if deck.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
     stats = compute_deck_stats(db, deck.id)
     return templates.TemplateResponse(
         request,
@@ -87,10 +86,9 @@ def study_page(deck_id: int, request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/login", status_code=302)
 
     deck = db.get(models.Deck, deck_id)
-    if not deck:
+    if not deck or deck.user_id != user.id:
+        # 404 rather than 403 so the page cannot confirm the deck exists.
         raise HTTPException(status_code=404, detail="Deck not found")
-    if deck.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
     stats = compute_deck_stats(db, deck.id)
     return templates.TemplateResponse(
         request,

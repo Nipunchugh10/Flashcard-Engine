@@ -21,6 +21,11 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Bumped on logout (and on any future password change) so that previously
+    # issued session tokens stop validating. Session cookies are stateless
+    # signed tokens, so without this a leaked cookie stays usable until it
+    # expires, even after the user logs out.
+    session_epoch: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     decks: Mapped[list["Deck"]] = relationship(

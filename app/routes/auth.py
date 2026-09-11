@@ -12,27 +12,36 @@ from ..auth import (
     clear_session_cookie,
     get_optional_user,
     hash_password,
+    invalidate_sessions,
     set_session_cookie,
     verify_password,
+    verify_password_dummy,
 )
 from ..database import get_db
+from ..security import auth_limiter, client_key
 
 router = APIRouter(tags=["auth"])
 templates = Jinja2Templates(directory="templates")
 
+# Deliberately identical for "no such account" and "wrong password", so the
+# response body cannot be used to discover which emails are registered.
+_BAD_CREDENTIALS = "Invalid email or password."
+_TOO_MANY = "Too many attempts. Please wait a few minutes and try again."
+
+
+def _render(request: Request, template: str, error: str | None, status: int = 400, **extra):
+    return templates.TemplateResponse(
+        request, template,
+        {"app_name": config.APP_NAME, "error": error, **extra},
+        status_code=status,
+    )
+
 
 @router.get("/login", response_class=HTMLResponse)
-def login_page(
-    request: Request,
-    user: models.User | None = Depends(get_optional_user),
-):
+def login_page(request: Request, user: models.User | None = Depends(get_optional_user)):
     if user:
         return RedirectResponse("/", status_code=302)
-    return templates.TemplateResponse(
-        request,
-        "login.html",
-        {"app_name": config.APP_NAME, "error": None},
-    )
+    return _render(request, "login.html", None, status=200)
 
 
 @router.post("/login", response_class=HTMLResponse)
@@ -42,35 +51,36 @@ def login_submit(
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
+    key = client_key(request, "login")
+    if auth_limiter.is_limited(key):
+        return _render(request, "login.html", _TOO_MANY, status=429)
+
     email = email.strip().lower()
     user = db.execute(
         select(models.User).where(models.User.email == email)
     ).scalar_one_or_none()
 
-    if not user or not verify_password(password, user.password_hash):
-        return templates.TemplateResponse(
-            request,
-            "login.html",
-            {"app_name": config.APP_NAME, "error": "Invalid email or password."},
-            status_code=400,
-        )
+    if user is None:
+        # Spend the same time a real bcrypt comparison costs, otherwise the
+        # response time reveals whether the account exists.
+        verify_password_dummy()
+        auth_limiter.record_failure(key)
+        return _render(request, "login.html", _BAD_CREDENTIALS)
 
+    if not verify_password(password, user.password_hash):
+        auth_limiter.record_failure(key)
+        return _render(request, "login.html", _BAD_CREDENTIALS)
+
+    auth_limiter.reset(key)
     response = RedirectResponse("/", status_code=302)
-    return set_session_cookie(response, user.id)
+    return set_session_cookie(response, user, request)
 
 
 @router.get("/signup", response_class=HTMLResponse)
-def signup_page(
-    request: Request,
-    user: models.User | None = Depends(get_optional_user),
-):
+def signup_page(request: Request, user: models.User | None = Depends(get_optional_user)):
     if user:
         return RedirectResponse("/", status_code=302)
-    return templates.TemplateResponse(
-        request,
-        "signup.html",
-        {"app_name": config.APP_NAME, "error": None},
-    )
+    return _render(request, "signup.html", None, status=200)
 
 
 @router.post("/signup", response_class=HTMLResponse)
@@ -82,21 +92,27 @@ def signup_submit(
     confirm_password: str = Form(...),
     db: Session = Depends(get_db),
 ):
+    key = client_key(request, "signup")
+    if auth_limiter.is_limited(key):
+        return _render(request, "signup.html", _TOO_MANY, status=429)
+
     username = username.strip()
     email = email.strip().lower()
 
-    # Validation
     errors = []
     if len(username) < 2:
         errors.append("Username must be at least 2 characters.")
-    if "@" not in email or "." not in email:
+    if len(username) > 100:
+        errors.append("Username must be 100 characters or fewer.")
+    if "@" not in email or "." not in email.split("@")[-1] or len(email) > 255:
         errors.append("Please enter a valid email address.")
-    if len(password) < 6:
-        errors.append("Password must be at least 6 characters.")
+    if len(password) < config.MIN_PASSWORD_LENGTH:
+        errors.append(f"Password must be at least {config.MIN_PASSWORD_LENGTH} characters.")
+    if len(password.encode("utf-8")) > 72:
+        errors.append("Password must be 72 bytes or fewer.")
     if password != confirm_password:
         errors.append("Passwords do not match.")
 
-    # Check existing email
     if not errors:
         existing = db.execute(
             select(models.User).where(models.User.email == email)
@@ -105,16 +121,10 @@ def signup_submit(
             errors.append("An account with this email already exists.")
 
     if errors:
-        return templates.TemplateResponse(
-            request,
-            "signup.html",
-            {
-                "app_name": config.APP_NAME,
-                "error": " ".join(errors),
-                "form_username": username,
-                "form_email": email,
-            },
-            status_code=400,
+        auth_limiter.record_failure(key)
+        return _render(
+            request, "signup.html", " ".join(errors),
+            form_username=username, form_email=email,
         )
 
     user = models.User(
@@ -126,11 +136,20 @@ def signup_submit(
     db.commit()
     db.refresh(user)
 
+    auth_limiter.reset(key)
     response = RedirectResponse("/", status_code=302)
-    return set_session_cookie(response, user.id)
+    return set_session_cookie(response, user, request)
 
 
 @router.post("/logout")
-def logout():
+def logout(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: models.User | None = Depends(get_optional_user),
+):
+    # Bump the session epoch so the token just discarded -- and any copy of it
+    # taken from a shared machine or a proxy log -- stops validating.
+    if user is not None:
+        invalidate_sessions(user, db)
     response = RedirectResponse("/login", status_code=302)
-    return clear_session_cookie(response)
+    return clear_session_cookie(response, request)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -60,9 +61,63 @@ MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", "100"))
 MAX_PDF_SIZE_MB = int(os.getenv("MAX_PDF_SIZE_MB", "10"))
 
 # --- Auth -----------------------------------------------------------------
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me-in-production")
+# The session cookie is a signed token, so anyone who knows SECRET_KEY can mint
+# a valid session for ANY user id -- full account takeover without a password.
+# Placeholder and short keys are therefore refused outright: we fall back to a
+# random key so a misconfigured deploy is never trivially forgeable. The cost is
+# that sessions do not survive a restart until a real key is configured, which
+# SECRET_KEY_WARNING reports loudly at startup.
+_PLACEHOLDER_SECRETS = {
+    "",
+    "dev-secret-change-me-in-production",
+    "change-me-to-something-random",
+    "recall-flashcard-engine-secret-key-2026",
+    "secret",
+    "secretkey",
+    "changeme",
+    "please-change-me",
+    "your-secret-key-here",
+}
+
+MIN_SECRET_KEY_LENGTH = 32
+
+
+def _resolve_secret_key() -> tuple[str, str | None]:
+    """Return (key, warning). Never returns a guessable key."""
+    raw = os.getenv("SECRET_KEY", "").strip()
+    if not raw:
+        return secrets.token_urlsafe(48), "SECRET_KEY is not set"
+    if raw.lower() in _PLACEHOLDER_SECRETS:
+        return secrets.token_urlsafe(48), "SECRET_KEY is a known placeholder value"
+    if len(raw) < MIN_SECRET_KEY_LENGTH:
+        return (
+            secrets.token_urlsafe(48),
+            f"SECRET_KEY is only {len(raw)} characters "
+            f"(minimum {MIN_SECRET_KEY_LENGTH})",
+        )
+    return raw, None
+
+
+SECRET_KEY, SECRET_KEY_WARNING = _resolve_secret_key()
+
 SESSION_COOKIE_NAME = "recall_session"
 SESSION_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
+
+# Send the session cookie only over HTTPS. "auto" decides per request from the
+# request scheme, so local http://localhost development still works while a
+# real deployment behind TLS gets a Secure cookie.
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "auto").strip().lower()
+
+# --- Abuse limits ----------------------------------------------------------
+# Failed login/signup attempts allowed per client within the window.
+AUTH_RATE_LIMIT_ATTEMPTS = int(os.getenv("AUTH_RATE_LIMIT_ATTEMPTS", "10"))
+AUTH_RATE_LIMIT_WINDOW = int(os.getenv("AUTH_RATE_LIMIT_WINDOW", "300"))  # seconds
+
+# Minimum password length accepted at signup.
+MIN_PASSWORD_LENGTH = int(os.getenv("MIN_PASSWORD_LENGTH", "8"))
+
+# Emit HSTS. Only enable when the site is genuinely HTTPS-only.
+ENABLE_HSTS = os.getenv("ENABLE_HSTS", "auto").strip().lower()
 
 # --- App ------------------------------------------------------------------
 APP_NAME = "Recall"

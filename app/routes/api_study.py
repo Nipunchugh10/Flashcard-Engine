@@ -33,11 +33,12 @@ NEW_CARDS_PER_SESSION = 20
 
 def _get_user_deck(deck_id: int, user: models.User, db: Session) -> models.Deck:
     """Fetch a deck and verify it belongs to the user."""
+    # Return 404 rather than 403 for someone else's deck: a 403 would
+    # confirm that the id exists, letting an attacker enumerate which
+    # decks other users own.
     deck = db.get(models.Deck, deck_id)
-    if not deck:
+    if not deck or deck.user_id != user.id:
         raise HTTPException(status_code=404, detail="Deck not found")
-    if deck.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
     return deck
 
 
@@ -110,7 +111,7 @@ def rate_card(
     # Verify ownership
     deck = db.get(models.Deck, card.deck_id)
     if not deck or deck.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=404, detail="Card not found")
 
     new_state = spaced_repetition.apply_rating(
         rating=payload.rating,  # type: ignore[arg-type]

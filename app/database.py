@@ -61,6 +61,7 @@ def _apply_migrations() -> None:
     migrations = [
         ("decks", "generation_status", "VARCHAR(20) DEFAULT 'ready'"),
         ("decks", "generation_error", "TEXT DEFAULT NULL"),
+        ("users", "session_epoch", "INTEGER DEFAULT 0 NOT NULL"),
     ]
     with engine.connect() as conn:
         for table, column, col_def in migrations:

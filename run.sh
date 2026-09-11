@@ -85,6 +85,11 @@ if [ "${1:-}" = "test" ]; then
   exec "$PY" smoke_test.py
 fi
 
+if [ "${1:-}" = "security" ]; then
+  echo "==> Running security tests"
+  exec "$PY" security_test.py
+fi
+
 PORT="${PORT:-8000}"
 echo "==> Recall starting on http://localhost:$PORT   (Ctrl-C to stop)"
 exec "$PY" -m uvicorn app.main:app --reload --host 0.0.0.0 --port "$PORT"

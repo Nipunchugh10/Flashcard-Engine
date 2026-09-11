@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from . import config
 from .database import init_db
 from .routes import api_cards, api_decks, api_study, auth, pages
+from .security import SecurityHeadersMiddleware
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,6 +23,19 @@ logging.basicConfig(
 async def lifespan(app: FastAPI):
     # --- startup ---
     init_db()
+    log = logging.getLogger(__name__)
+    if config.SECRET_KEY_WARNING:
+        log.critical(
+            "=" * 72 + "\n"
+            "  INSECURE CONFIGURATION: %s.\n"
+            "  A random key has been generated for this process instead, so\n"
+            "  session cookies CANNOT be forged -- but every user will be\n"
+            "  logged out whenever the app restarts.\n"
+            "  Fix it by setting a strong SECRET_KEY, for example:\n"
+            "      python3 -c 'import secrets; print(secrets.token_urlsafe(48))'\n"
+            + "=" * 72,
+            config.SECRET_KEY_WARNING,
+        )
     provider = config.active_provider()
     model_label = {
         "gemini": config.GEMINI_MODEL,
@@ -44,6 +58,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+# Security headers on every response (CSP, nosniff, frame-ancestors, HSTS).
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

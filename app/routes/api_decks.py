@@ -47,11 +47,12 @@ def _serialize_deck(deck: models.Deck, db: Session) -> DeckOut:
 
 def _get_user_deck(deck_id: int, user: models.User, db: Session) -> models.Deck:
     """Fetch a deck and verify it belongs to the user."""
+    # Return 404 rather than 403 for someone else's deck: a 403 would
+    # confirm that the id exists, letting an attacker enumerate which
+    # decks other users own.
     deck = db.get(models.Deck, deck_id)
-    if not deck:
+    if not deck or deck.user_id != user.id:
         raise HTTPException(status_code=404, detail="Deck not found")
-    if deck.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
     return deck
 
 
@@ -128,6 +129,16 @@ async def upload_pdf(
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
     max_bytes = config.MAX_PDF_SIZE_MB * 1024 * 1024
+
+    # Reject on the declared size first. Without this the whole upload is
+    # buffered before the limit is checked, so an oversized body costs the
+    # server the memory and disk regardless of the cap.
+    if file.size is not None and file.size > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"PDF too large (max {config.MAX_PDF_SIZE_MB} MB).",
+        )
+
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
