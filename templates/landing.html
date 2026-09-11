@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include "components/head.html" %}
+  <title>{{ app_name }} &mdash; {{ app_tagline }}</title>
+  <meta name="description" content="{{ app_name }} turns any PDF into a spaced-repetition flashcard deck. Upload a chapter or lecture notes and start studying in under a minute." />
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+</head>
+<body class="font-sans text-ink-900 bg-paper-50 antialiased min-h-screen">
+  <div class="page-grain"></div>
+
+  <!-- ================= Nav ================= -->
+  <header class="sticky top-0 z-30 border-b border-paper-300/60 bg-paper-50/85 backdrop-blur-sm">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+      <a href="/" class="flex items-center gap-3 group shrink-0">
+        <span class="inline-block w-8 h-8 rounded-sm bg-ember-500 rotate-[-4deg] shadow-paper group-hover:rotate-0 transition-transform"></span>
+        <span class="font-display text-2xl font-semibold tracking-tight">{{ app_name }}</span>
+      </a>
+      <nav class="flex items-center gap-1 sm:gap-5 text-sm">
+        <a href="#how" class="hidden md:inline px-2 py-2 text-ink-700 hover:text-ember-600 transition-colors">How it works</a>
+        <a href="#features" class="hidden md:inline px-2 py-2 text-ink-700 hover:text-ember-600 transition-colors">Features</a>
+        <a href="#schedule" class="hidden md:inline px-2 py-2 text-ink-700 hover:text-ember-600 transition-colors">The schedule</a>
+        <a href="/login" class="px-3 py-2 text-ink-700 hover:text-ember-600 transition-colors">Log in</a>
+        <a href="/signup"
+           class="inline-flex items-center gap-2 rounded-full bg-ink-900 text-paper-50 px-4 py-2 font-medium hover:bg-ember-600 transition-colors whitespace-nowrap">
+          Get started
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="relative z-10">
+
+    <!-- ================= Hero ================= -->
+    <section class="max-w-6xl mx-auto px-6 pt-14 pb-20 md:pt-24 md:pb-28">
+      <div class="grid lg:grid-cols-[1.05fr_1fr] gap-14 lg:gap-16 items-center">
+
+        <div class="reveal">
+          <div class="inline-flex items-center gap-2 rounded-full border border-paper-300 bg-paper-100 px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-ink-600 mb-7">
+            <span class="w-1.5 h-1.5 rounded-full bg-ember-500"></span>
+            PDF in &middot; flashcards out
+          </div>
+
+          <h1 class="font-display text-5xl sm:text-6xl md:text-7xl font-semibold tracking-tight leading-[0.95]">
+            Read it once.<br />
+            <span class="text-ember-600 italic">Remember</span> it for good.
+          </h1>
+
+          <p class="mt-6 text-lg text-ink-600 leading-relaxed max-w-xl">
+            {{ app_name }} reads your PDFs &mdash; a textbook chapter, lecture notes, a paper &mdash;
+            and writes you a flashcard deck. Then it schedules each card to come back
+            right before you'd forget it.
+          </p>
+
+          <div class="mt-9 flex flex-wrap items-center gap-3">
+            <a href="/signup"
+               class="inline-flex items-center gap-2 rounded-full bg-ember-500 text-paper-50 px-7 py-3.5 font-medium text-lg hover:bg-ember-600 transition-colors shadow-paper">
+              Build your first deck
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6"/></svg>
+            </a>
+            <a href="/login"
+               class="inline-flex items-center gap-2 rounded-full border border-paper-300 bg-paper-100 px-6 py-3.5 font-medium hover:border-ink-400 transition-colors">
+              I already have an account
+            </a>
+          </div>
+
+          <p class="mt-5 text-sm text-ink-500">
+            Free &middot; no credit card &middot; your decks stay private to your account
+          </p>
+        </div>
+
+        <!-- Hero visual: a flashcard that flips on its own -->
+        <div class="reveal" style="--d: 140ms">
+          <div class="float-slow"
+               x-data="{ flipped: false, paused: false }"
+               x-init="setInterval(() => { if (!paused) flipped = !flipped }, 4000)"
+               @mouseenter="paused = true" @mouseleave="paused = false">
+            <div class="relative">
+              <!-- paper stack behind -->
+              <div class="absolute inset-0 translate-x-3 translate-y-4 rotate-[2.5deg] rounded-2xl bg-paper-200 border border-paper-300"></div>
+              <div class="absolute inset-0 translate-x-1.5 translate-y-2 rotate-[1.2deg] rounded-2xl bg-paper-100 border border-paper-300"></div>
+
+              <div class="flip-card flip-card--demo" :class="{ 'is-flipped': flipped }" @click="flipped = !flipped">
+                <!-- front -->
+                <div class="flip-face flip-front bg-paper-100 border border-paper-300 shadow-card rounded-2xl">
+                  <div class="h-full flex flex-col justify-between p-7">
+                    <div class="flex items-center justify-between text-xs font-mono uppercase tracking-wider">
+                      <span class="text-ink-500">definition</span>
+                      <span class="text-ink-400">new</span>
+                    </div>
+                    <p class="font-display text-2xl leading-snug tracking-tight text-center px-2">
+                      Why does spacing reviews out beat re-reading the same page?
+                    </p>
+                    <div class="text-center text-xs text-ink-400 font-mono tracking-wider">
+                      Press <span class="kbd">Space</span> to reveal
+                    </div>
+                  </div>
+                </div>
+
+                <!-- back -->
+                <div class="flip-face flip-back bg-paper-50 border border-ember-500/40 shadow-card rounded-2xl">
+                  <div class="h-full flex flex-col p-7">
+                    <div class="mb-3 pb-3 border-b border-paper-300">
+                      <div class="text-xs font-mono uppercase tracking-wider text-ink-400 mb-1.5">Question</div>
+                      <p class="font-display text-base leading-snug text-ink-700">
+                        Why does spacing reviews out beat re-reading the same page?
+                      </p>
+                    </div>
+                    <div class="flex-1 flex items-center">
+                      <div>
+                        <div class="text-xs font-mono uppercase tracking-wider text-ember-600 mb-1.5">Answer</div>
+                        <p class="text-lg leading-relaxed text-ink-900">
+                          Retrieving a fact just as it starts to fade forces effortful recall,
+                          which strengthens the memory far more than passive review.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- rating row -->
+            <div class="mt-5 grid grid-cols-4 gap-2 text-center">
+              <div class="rounded-lg border border-rose-500/40 bg-paper-100 px-2 py-2">
+                <div class="text-sm font-medium text-rose-600">Again</div>
+                <div class="text-[11px] font-mono text-ink-500 mt-0.5">10 min</div>
+              </div>
+              <div class="rounded-lg border border-amber2-500/40 bg-paper-100 px-2 py-2">
+                <div class="text-sm font-medium text-amber2-500">Hard</div>
+                <div class="text-[11px] font-mono text-ink-500 mt-0.5">4 days</div>
+              </div>
+              <div class="rounded-lg border border-ember-500/40 bg-paper-100 px-2 py-2">
+                <div class="text-sm font-medium text-ember-600">Good</div>
+                <div class="text-[11px] font-mono text-ink-500 mt-0.5">6 days</div>
+              </div>
+              <div class="rounded-lg border border-moss-500/40 bg-paper-100 px-2 py-2">
+                <div class="text-sm font-medium text-moss-600">Easy</div>
+                <div class="text-[11px] font-mono text-ink-500 mt-0.5">8 days</div>
+              </div>
+            </div>
+            <p class="mt-3 text-center text-xs text-ink-400 font-mono">
+              Grade with <span class="kbd">1</span> <span class="kbd">2</span> <span class="kbd">3</span> <span class="kbd">4</span> &mdash; never touch the mouse
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= How it works ================= -->
+    <section id="how" class="max-w-6xl mx-auto px-6 py-20 md:py-24 scroll-mt-20">
+      <div class="rule-fade mb-16"></div>
+
+      <div class="max-w-2xl">
+        <div class="step-num uppercase text-ink-500 mb-3">How it works</div>
+        <h2 class="font-display text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
+          Three steps, about a minute
+        </h2>
+      </div>
+
+      <div class="mt-14 grid md:grid-cols-3 gap-10 md:gap-8">
+        <div class="reveal">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="w-9 h-9 rounded-full bg-ink-900 text-paper-50 flex items-center justify-center font-mono text-sm">1</span>
+            <div class="h-px flex-1 bg-paper-300"></div>
+          </div>
+          <h3 class="font-display text-2xl font-semibold tracking-tight">Drop in a PDF</h3>
+          <p class="mt-2.5 text-ink-600 leading-relaxed">
+            A chapter, a slide deck, a set of lecture notes. Anything text-based,
+            up to 10 MB. Name it or let the filename do the work.
+          </p>
+        </div>
+
+        <div class="reveal" style="--d: 120ms">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="w-9 h-9 rounded-full bg-ink-900 text-paper-50 flex items-center justify-center font-mono text-sm">2</span>
+            <div class="h-px flex-1 bg-paper-300"></div>
+          </div>
+          <h3 class="font-display text-2xl font-semibold tracking-tight">It gets read properly</h3>
+          <p class="mt-2.5 text-ink-600 leading-relaxed">
+            The text is split along paragraph boundaries so ideas stay intact,
+            then written up as cards &mdash; with the card count scaled to how
+            much is actually in the document.
+          </p>
+        </div>
+
+        <div class="reveal" style="--d: 240ms">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="w-9 h-9 rounded-full bg-ember-500 text-paper-50 flex items-center justify-center font-mono text-sm">3</span>
+            <div class="h-px flex-1 bg-paper-300"></div>
+          </div>
+          <h3 class="font-display text-2xl font-semibold tracking-tight">Study on schedule</h3>
+          <p class="mt-2.5 text-ink-600 leading-relaxed">
+            Reveal, grade yourself honestly, move on. Each card comes back at a
+            widening interval &mdash; and the ones you fumble come back sooner.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Card types ================= -->
+    <section class="max-w-6xl mx-auto px-6 py-20 md:py-24">
+      <div class="rule-fade mb-16"></div>
+
+      <div class="grid lg:grid-cols-[1fr_1.2fr] gap-12 lg:gap-16 items-start">
+        <div>
+          <div class="step-num uppercase text-ink-500 mb-3">Not a text dump</div>
+          <h2 class="font-display text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
+            Four kinds of card, mixed on purpose
+          </h2>
+          <p class="mt-5 text-ink-600 leading-relaxed">
+            Highlighting a paragraph doesn't test anything. Every deck comes out
+            as a blend of question types, because recalling a definition and
+            applying an idea are different skills &mdash; and you want both.
+          </p>
+          <p class="mt-4 text-ink-600 leading-relaxed">
+            Cards are written to stand on their own. No
+            <span class="font-mono text-sm text-ink-500">&ldquo;according to the passage&hellip;&rdquo;</span>,
+            no page-number trivia, no questions that answer themselves.
+          </p>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div class="rounded-xl bg-paper-100 border border-paper-300 p-5 shadow-paper reveal">
+            <div class="text-xs font-mono uppercase tracking-wider text-ember-600 mb-3">Q&amp;A</div>
+            <p class="font-display text-lg leading-snug">Why do idle database connections need a pre-ping?</p>
+            <p class="mt-2 text-sm text-ink-600 leading-relaxed">Because the server or network may silently drop them between requests.</p>
+          </div>
+          <div class="rounded-xl bg-paper-100 border border-paper-300 p-5 shadow-paper reveal" style="--d: 90ms">
+            <div class="text-xs font-mono uppercase tracking-wider text-moss-600 mb-3">Definition</div>
+            <p class="font-display text-lg leading-snug">What is an ease factor?</p>
+            <p class="mt-2 text-sm text-ink-600 leading-relaxed">A per-card multiplier that stretches or shrinks the gap before its next review.</p>
+          </div>
+          <div class="rounded-xl bg-paper-100 border border-paper-300 p-5 shadow-paper reveal" style="--d: 180ms">
+            <div class="text-xs font-mono uppercase tracking-wider text-amber2-500 mb-3">Cloze</div>
+            <p class="font-display text-lg leading-snug">Write-ahead logging lets SQLite handle ___ readers alongside one writer.</p>
+            <p class="mt-2 text-sm text-ink-600 leading-relaxed">concurrent</p>
+          </div>
+          <div class="rounded-xl bg-paper-100 border border-paper-300 p-5 shadow-paper reveal" style="--d: 270ms">
+            <div class="text-xs font-mono uppercase tracking-wider text-ink-500 mb-3">Application</div>
+            <p class="font-display text-lg leading-snug">You rate a card Again three sessions running. What has happened to its interval?</p>
+            <p class="mt-2 text-sm text-ink-600 leading-relaxed">It reset to minutes each time, and the lapse count rose &mdash; the card needs rewriting, not more repetitions.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= The schedule ================= -->
+    <section id="schedule" class="max-w-6xl mx-auto px-6 py-20 md:py-24 scroll-mt-20">
+      <div class="rule-fade mb-16"></div>
+
+      <div class="max-w-2xl">
+        <div class="step-num uppercase text-ink-500 mb-3">The schedule</div>
+        <h2 class="font-display text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
+          Intervals that stretch as you get it right
+        </h2>
+        <p class="mt-5 text-ink-600 leading-relaxed">
+          {{ app_name }} uses SM-2, the algorithm behind SuperMemo and Anki. Get a
+          card right and the gap widens. Miss it and the card drops back into the
+          short queue, while its ease factor quietly falls so it stays harder for longer.
+        </p>
+      </div>
+
+      <div class="mt-14 rounded-2xl bg-paper-100 border border-paper-300 p-7 md:p-10 shadow-paper">
+        <div class="flex items-center gap-3 md:gap-5 flex-wrap">
+          <div class="rounded-lg bg-paper-50 border border-paper-300 px-4 py-3 text-center min-w-[92px]">
+            <div class="font-display text-xl font-semibold">1st</div>
+            <div class="text-xs font-mono text-ink-500 mt-0.5">1 day</div>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-ink-400 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6"/></svg>
+          <div class="rounded-lg bg-paper-50 border border-paper-300 px-4 py-3 text-center min-w-[92px]">
+            <div class="font-display text-xl font-semibold">2nd</div>
+            <div class="text-xs font-mono text-ink-500 mt-0.5">6 days</div>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-ink-400 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6"/></svg>
+          <div class="rounded-lg bg-paper-50 border border-paper-300 px-4 py-3 text-center min-w-[92px]">
+            <div class="font-display text-xl font-semibold">3rd</div>
+            <div class="text-xs font-mono text-ink-500 mt-0.5">15 days</div>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-ink-400 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6"/></svg>
+          <div class="rounded-lg bg-paper-50 border border-paper-300 px-4 py-3 text-center min-w-[92px]">
+            <div class="font-display text-xl font-semibold">4th</div>
+            <div class="text-xs font-mono text-ink-500 mt-0.5">38 days</div>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-ink-400 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6"/></svg>
+          <div class="rounded-lg bg-moss-500/10 border border-moss-500/40 px-4 py-3 text-center min-w-[92px]">
+            <div class="font-display text-xl font-semibold text-moss-600">Mastered</div>
+            <div class="text-xs font-mono text-moss-600/80 mt-0.5">21 days+</div>
+          </div>
+        </div>
+
+        <div class="mt-7 pt-6 border-t border-paper-300 flex items-start gap-3 text-sm text-ink-600">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-4 h-4 mt-0.5 shrink-0 text-rose-500"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+          <p class="leading-relaxed">
+            Rate a card <span class="text-rose-600 font-medium">Again</span> and it returns
+            in about ten minutes with its streak reset &mdash; no waiting a day to
+            re-learn something you just got wrong.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Features ================= -->
+    <section id="features" class="max-w-6xl mx-auto px-6 py-20 md:py-24 scroll-mt-20">
+      <div class="rule-fade mb-16"></div>
+
+      <div class="max-w-2xl">
+        <div class="step-num uppercase text-ink-500 mb-3">Features</div>
+        <h2 class="font-display text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
+          Everything the studying actually needs
+        </h2>
+      </div>
+
+      <div class="mt-14 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+
+        <div class="rounded-xl bg-paper-100 border border-paper-300 p-6 shadow-paper hover:shadow-paper-lg transition-shadow reveal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="w-6 h-6 text-ember-600 mb-4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M4 20h16"/></svg>
+          <h3 class="font-display text-xl font-semibold tracking-tight">Drag, drop, done</h3>
+          <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+            Generation runs in the background, so the upload never hangs.
+            Close the tab &mdash; the deck carries on building.
+          </p>
+        </div>
+
+        <div class="rounded-xl bg-paper-100 border border-paper-300 p-6 shadow-paper hover:shadow-paper-lg transition-shadow reveal" style="--d: 80ms">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="w-6 h-6 text-ember-600 mb-4"><rect x="3" y="4" width="18" height="14" rx="2"/><path stroke-linecap="round" d="M7 20h10M8 9h8M8 13h5"/></svg>
+          <h3 class="font-display text-xl font-semibold tracking-tight">Keyboard-first study</h3>
+          <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+            <span class="kbd">Space</span> reveals, <span class="kbd">1</span>&ndash;<span class="kbd">4</span> grades.
+            A full session without reaching for the mouse.
+          </p>
+        </div>
+
+        <div class="rounded-xl bg-paper-100 border border-paper-300 p-6 shadow-paper hover:shadow-paper-lg transition-shadow reveal" style="--d: 160ms">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="w-6 h-6 text-ember-600 mb-4"><path stroke-linecap="round" stroke-linejoin="round" d="M11 4h2M4 11v2M20 11v2M11 20h2"/><circle cx="12" cy="12" r="4"/></svg>
+          <h3 class="font-display text-xl font-semibold tracking-tight">Honest progress</h3>
+          <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+            New, learning, review, mastered &mdash; per deck, at a glance.
+            Mastered means 21+ days and four clean recalls, not a participation badge.
+          </p>
+        </div>
+
+        <div class="rounded-xl bg-paper-100 border border-paper-300 p-6 shadow-paper hover:shadow-paper-lg transition-shadow reveal" style="--d: 240ms">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="w-6 h-6 text-ember-600 mb-4"><path stroke-linecap="round" stroke-linejoin="round" d="M11 4h6a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2v-6"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 13l9-9 3 3-9 9H4v-3z"/></svg>
+          <h3 class="font-display text-xl font-semibold tracking-tight">Yours to edit</h3>
+          <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+            Search the deck, filter by status, rewrite any card that isn't
+            pulling its weight, bin the ones that aren't.
+          </p>
+        </div>
+
+        <div class="rounded-xl bg-paper-100 border border-paper-300 p-6 shadow-paper hover:shadow-paper-lg transition-shadow reveal" style="--d: 320ms">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="w-6 h-6 text-ember-600 mb-4"><rect x="4" y="10" width="16" height="11" rx="2"/><path stroke-linecap="round" d="M8 10V7a4 4 0 018 0v3"/></svg>
+          <h3 class="font-display text-xl font-semibold tracking-tight">Private by account</h3>
+          <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+            Passwords are hashed with bcrypt and sessions are signed.
+            Every deck, card and review belongs to you alone.
+          </p>
+        </div>
+
+        <div class="rounded-xl bg-paper-100 border border-paper-300 p-6 shadow-paper hover:shadow-paper-lg transition-shadow reveal" style="--d: 400ms">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="w-6 h-6 text-ember-600 mb-4"><path stroke-linecap="round" stroke-linejoin="round" d="M13 2L4.5 12.5a1 1 0 00.8 1.6H11l-1 7.9 8.5-10.5a1 1 0 00-.8-1.6H12l1-7.9z"/></svg>
+          <h3 class="font-display text-xl font-semibold tracking-tight">Sized to the source</h3>
+          <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+            A three-page handout gets a handful of cards, not seventy.
+            The deck scales to how much is genuinely in the document.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Closing CTA ================= -->
+    <section class="max-w-6xl mx-auto px-6 pb-24 md:pb-32">
+      <div class="relative overflow-hidden rounded-2xl bg-ink-900 text-paper-100 px-8 py-14 md:px-16 md:py-20 text-center">
+        <div class="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-ember-500/15 blur-2xl pointer-events-none"></div>
+        <div class="relative">
+          <h2 class="font-display text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
+            There's a PDF you've been meaning to learn.
+          </h2>
+          <p class="mt-5 text-paper-300 text-lg max-w-xl mx-auto leading-relaxed">
+            Upload it and you'll be studying in about a minute.
+          </p>
+          <a href="/signup"
+             class="mt-9 inline-flex items-center gap-2 rounded-full bg-ember-500 text-paper-50 px-8 py-4 font-medium text-lg hover:bg-ember-600 transition-colors">
+            Create your account
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6"/></svg>
+          </a>
+          <p class="mt-5 text-sm text-paper-300/70">
+            Already signed up? <a href="/login" class="underline underline-offset-4 hover:text-paper-50 transition-colors">Log in instead</a>
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= Footer ================= -->
+  <footer class="relative z-10 border-t border-paper-300/60">
+    <div class="max-w-6xl mx-auto px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-5 text-sm text-ink-500">
+      <div class="flex items-center gap-2.5">
+        <span class="inline-block w-5 h-5 rounded-sm bg-ember-500 rotate-[-4deg]"></span>
+        <span class="font-display text-lg font-semibold tracking-tight text-ink-800">{{ app_name }}</span>
+        <span class="text-ink-400">&mdash; {{ app_tagline }}</span>
+      </div>
+      <div class="flex items-center gap-5">
+        <a href="/login" class="hover:text-ember-600 transition-colors">Log in</a>
+        <a href="/signup" class="hover:text-ember-600 transition-colors">Sign up</a>
+        <span class="font-mono text-xs uppercase tracking-wider">MIT licensed</span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

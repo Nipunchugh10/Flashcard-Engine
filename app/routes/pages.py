@@ -20,7 +20,16 @@ templates = Jinja2Templates(directory="templates")
 def home(request: Request, db: Session = Depends(get_db)):
     user = _get_user_from_request(request, db)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        # Anonymous visitors get the marketing landing page. Sending them
+        # straight to /login gave first-time visitors no idea what this is.
+        return templates.TemplateResponse(
+            request,
+            "landing.html",
+            {
+                "app_name": config.APP_NAME,
+                "app_tagline": config.APP_TAGLINE,
+            },
+        )
 
     decks = db.execute(
         select(models.Deck)

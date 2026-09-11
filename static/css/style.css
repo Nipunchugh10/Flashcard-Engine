@@ -112,3 +112,52 @@
   border: 2px solid #fdfaf3;
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(24, 20, 15, 0.3); }
+
+/* --- Landing page ----------------------------------------------- */
+
+@keyframes recall-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Staggered entrance. Set --d on the element for a delay. */
+.reveal {
+  animation: recall-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--d, 0ms);
+}
+
+@keyframes recall-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-9px); }
+}
+
+.float-slow { animation: recall-float 7s ease-in-out infinite; }
+
+/* The hero demo card is shorter than the full study card. */
+.flip-card--demo { min-height: 300px; }
+
+/* Hairline rule that fades out at both ends. */
+.rule-fade {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(24, 20, 15, 0.14) 20%,
+    rgba(24, 20, 15, 0.14) 80%,
+    transparent
+  );
+}
+
+/* Numbered step markers in "How it works". */
+.step-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .float-slow {
+    animation: none;
+  }
+}
