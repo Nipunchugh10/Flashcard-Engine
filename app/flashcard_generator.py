@@ -302,33 +302,37 @@ def _heuristic_cards(chunk: str, max_cards: int) -> list[GeneratedCard]:
 # Adaptive budget — scale card count to source size
 # ---------------------------------------------------------------------------
 
-# Secondary safety: roughly 1 flashcard per 250 characters of source text.
-# This prevents generating cards from nearly-empty or image-only pages.
-_CHARS_PER_CARD = 250
+# Roughly one card per this many characters of real text. Tuned so a dense
+# page (~2,500-3,000 chars) earns 7-8 cards and a sparse one earns 2-3.
+_CHARS_PER_CARD = 350
+# Ceiling per page, so a single unusually text-dense page can't run away with
+# the whole budget.
+_MAX_CARDS_PER_PAGE = 8
 _MIN_CARDS = 3
 
 
 def _estimate_card_budget(chunks: list[str], hard_max: int, pages_read: int = 0) -> int:
-    """Return an adaptive card cap based on page count and character volume.
+    """Return an adaptive card cap based on how much text the PDF actually has.
 
-    Primary signal: linear page-based scaling.
-        pages_read / MAX_PDF_PAGES * hard_max
-        e.g. 50 pages → 35 cards, 100 pages → 70 cards.
+    Character volume is the PRIMARY signal, because it tracks real content:
+    image-heavy or sparse PDFs naturally earn fewer cards without any special
+    casing. Page count only supplies a ceiling of _MAX_CARDS_PER_PAGE per page.
 
-    Secondary signal: character-based estimate as an upper-safety check so
-    that very sparse/image-heavy PDFs don't receive more cards than the
-    actual text content justifies.
+    This used to be the other way around -- page count was primary, computed as
+    ``pages_read / MAX_PDF_PAGES * hard_max``. That starved short documents:
+    a dense 5-page paper was capped at 4 cards and a 10-page chapter at 7,
+    however much text was actually on the pages.
     """
     total_chars = sum(len(c) for c in chunks)
-    char_budget = max(_MIN_CARDS, total_chars // _CHARS_PER_CARD)
+    if not total_chars:
+        return 0
+
+    budget = max(_MIN_CARDS, round(total_chars / _CHARS_PER_CARD))
 
     if pages_read > 0:
-        page_budget = max(_MIN_CARDS, round(pages_read * hard_max / config.MAX_PDF_PAGES))
-        # Use the lower of the two estimates so sparse pages don't over-produce.
-        return min(page_budget, char_budget, hard_max)
+        budget = min(budget, max(_MIN_CARDS, pages_read * _MAX_CARDS_PER_PAGE))
 
-    # Fallback when page count is unavailable (legacy callers).
-    return min(char_budget, hard_max)
+    return min(budget, hard_max)
 
 
 def generate_cards_for_chunks(

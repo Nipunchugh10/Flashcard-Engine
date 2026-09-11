@@ -27,20 +27,61 @@ def main():
 
 
 def _minimal_pdf_bytes() -> bytes:
-    # Generate a tiny, valid single-page PDF using PyMuPDF (already a dependency).
+    """Build a small but realistic two-page study PDF using PyMuPDF.
+
+    Deliberately written in definition-style prose so the offline heuristic
+    generator has real patterns to match, and long enough (~2.5k chars over
+    2 pages) that the adaptive card budget returns a realistic deck rather
+    than the 3-card floor.
+    """
     import fitz  # PyMuPDF
 
-    doc = fitz.open()
-    page = doc.new_page()
-    text = (
-        "Spaced Repetition is a learning method that schedules reviews at expanding intervals to improve long-term memory retention. "
-        "Active Recall is a study technique where you retrieve information from memory instead of rereading notes. "
-        "Interleaving refers to mixing related topics during practice so the learner improves discrimination between concepts. "
-        "A Review Queue is the ordered set of cards that are due now based on each card's next review timestamp. "
-        "A Flashcard Deck is a collection of prompts and answers used to train memory through repeated testing. "
-        "Difficulty Rating means the learner reports how hard retrieval felt, which updates interval and ease factor. "
+    page_one = (
+        "Spaced Repetition is a learning method that schedules reviews at expanding "
+        "intervals to improve long-term memory retention. "
+        "Active Recall is a study technique where the learner retrieves information "
+        "from memory instead of rereading notes. "
+        "Interleaving refers to mixing related topics during practice so the learner "
+        "improves discrimination between concepts. "
+        "A Review Queue is the ordered set of cards that are due now based on each "
+        "card's next review timestamp. "
+        "A Flashcard Deck is a collection of prompts and answers used to train memory "
+        "through repeated testing. "
+        "Difficulty Rating means the learner reports how hard retrieval felt, which "
+        "updates the interval and the ease factor. "
+        "The Ease Factor is a per-card multiplier that widens or narrows the gap "
+        "before that card is scheduled again. "
+        "A Lapse refers to a review in which the learner failed to recall the answer "
+        "and the card returned to the short queue. "
+        "The Forgetting Curve is a model describing how retention of a memory decays "
+        "over time without reinforcement. "
     )
-    page.insert_textbox((50, 50, 550, 780), text, fontsize=12)
+
+    page_two = (
+        "Retrieval Practice is the deliberate act of pulling a fact out of memory in "
+        "order to strengthen the trace. "
+        "Elaboration means connecting a new idea to knowledge the learner already "
+        "holds so that recall has more routes. "
+        "A Cloze Deletion is a prompt in which a key phrase is removed from a sentence "
+        "and must be supplied by the learner. "
+        "Chunking refers to grouping small pieces of information into larger units so "
+        "working memory can hold more. "
+        "The Testing Effect is the finding that being tested on material produces "
+        "better retention than restudying it. "
+        "Desirable Difficulty means a level of challenge that slows initial learning "
+        "but improves durable retention. "
+        "Metacognition is the learner's awareness of what they do and do not actually "
+        "know at a given moment. "
+        "A Study Session is a bounded period in which due cards are reviewed and new "
+        "cards are gradually introduced. "
+        "Consolidation refers to the process by which a fresh memory becomes stable "
+        "and resistant to interference over time. "
+    )
+
+    doc = fitz.open()
+    for body in (page_one, page_two):
+        page = doc.new_page()
+        page.insert_textbox((50, 50, 550, 780), body, fontsize=11)
     pdf = doc.tobytes()
     doc.close()
     return pdf
@@ -60,11 +101,41 @@ def _signup(client) -> None:
     assert r.status_code in (302, 303), r.text[:500]
 
 
+def _wait_for_deck_ready(client, deck_id: int, timeout: float = 90.0) -> None:
+    """Block until background card generation finishes.
+
+    Uploads return immediately with generation_status="processing", so every
+    assertion about cards has to wait for the worker thread to commit them.
+    """
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        r = client.get(f"/api/decks/{deck_id}/status")
+        assert r.status_code == 200, r.text[:300]
+        body = r.json()
+        if body["generation_status"] == "ready":
+            return
+        if body["generation_status"] == "failed":
+            raise AssertionError(
+                f"deck {deck_id} generation failed: {body.get('generation_error')}"
+            )
+        time.sleep(0.25)
+    raise AssertionError(f"deck {deck_id} still processing after {timeout}s")
+
+
 def run_tests(client):
 
-    # --- 0. Create an account (auth is required for app pages + APIs) ----------
+    # --- 0. Landing page for anonymous visitors --------------------------------
+    r = client.get("/")
+    assert r.status_code == 200, r.text[:500]
+    assert "Build your first deck" in r.text      # hero CTA
+    assert "Your decks" not in r.text             # not the logged-in dashboard
+    print("[0] GET /  (anonymous)                -> 200  (landing page renders)")
+
+    # --- 1. Create an account (auth is required for app pages + APIs) ----------
     _signup(client)
-    print("[0] POST /signup                      -> 302  (session cookie set)")
+    print("[1] POST /signup                      -> 302  (session cookie set)")
 
     # --- 1. Home page -----------------------------------------------------------
     r = client.get("/")
@@ -93,6 +164,9 @@ def run_tests(client):
     assert r.status_code == 201, f"{r.status_code}: {r.text[:500]}"
     deck = r.json()
     deck_id = deck["id"]
+    assert deck["generation_status"] == "processing"
+    _wait_for_deck_ready(client, deck_id)
+    deck = client.get(f"/api/decks/{deck_id}").json()
     print(f"[3] POST /api/decks/upload            -> 201  deck_id={deck_id}  "
           f"cards={deck['stats']['total']}  pages={deck['source_pages']}")
 
@@ -223,7 +297,7 @@ def run_tests(client):
     assert r.status_code == 200
     print("[18] GET /docs                        -> 200  (OpenAPI UI up)")
 
-    print("\nAll 18 smoke tests passed.")
+    print("\nAll 19 smoke tests passed.")
 
 
 if __name__ == "__main__":
