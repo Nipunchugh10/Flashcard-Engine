@@ -5,6 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
@@ -57,6 +58,12 @@ app.include_router(auth.router)
 app.include_router(api_decks.router)
 app.include_router(api_cards.router)
 app.include_router(api_study.router)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> FileResponse:
+    """Browsers request /favicon.ico directly, without reading the HTML."""
+    return FileResponse("static/favicon.ico", media_type="image/x-icon")
 
 
 @app.get("/healthz")
