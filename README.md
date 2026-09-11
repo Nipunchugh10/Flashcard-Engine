@@ -226,6 +226,45 @@ flashcard-engine/
 
 ---
 
+## Studying
+
+| Key | Does |
+|---|---|
+| `Space` / `Enter` | reveal the answer |
+| `1` `2` `3` `4` | grade Again / Hard / Good / Easy |
+| `Space` (revealed) | grade Good |
+| `U` or `Ctrl`+`Z` | undo the last review |
+| `E` | fix the card you're looking at |
+| `Esc` | leave the editor |
+
+**Undo.** Every review stores a full snapshot of the card beforehand, so undo
+restores ease, interval, repetitions, lapses, review count, status and due date
+exactly — not a recomputation, so it stays correct even if the scheduling
+algorithm is later tuned. Press it repeatedly to walk back through a session.
+It is also reachable from the finished screen, for when you realise the last
+card was a misclick.
+
+**Space is guarded.** `Space` both reveals and grades Good, so a double-tap
+would otherwise grade a card you never read. A grade within 400ms of the reveal
+is ignored.
+
+**Fix a card mid-session.** Generated cards are occasionally wrong, and you
+find out precisely when one is in front of you. `E` edits it in place without
+leaving the session.
+
+**Review activity.** Each deck shows the last 30 days: total reviews, recall
+rate, current streak, busiest day, and a daily bar chart. Because the chart's
+job is volume-over-time it uses a single hue, with the Again/Hard/Good/Easy
+split in the hover readout rather than as four near-identical warm colours —
+the app's own rating colours measured ΔE 12.7 between `good` and `hard` for
+normal vision, below the legibility floor. A table view carries the same data
+for anyone not using a pointer or colour.
+
+A streak counts consecutive days with at least one review; today being empty
+does not break it, because the day is not over yet.
+
+---
+
 ## Key design decisions
 
 **Background processing.** PDF upload returns instantly. Extraction and LLM calls happen in a background thread with its own DB session. The frontend polls a lightweight `/status` endpoint every 2 seconds. This prevents request timeouts on free-tier hosts like Render.
@@ -267,6 +306,8 @@ flashcard-engine/
 | `DELETE` | `/api/cards/{id}`               | delete card |
 | `GET`    | `/api/study/{deck_id}/next`     | next due card for a session |
 | `POST`   | `/api/study/cards/{id}/rate`    | rate a card (`again`/`hard`/`good`/`easy`) |
+| `POST`   | `/api/study/{deck_id}/undo`     | reverse the most recent review |
+| `GET`    | `/api/study/{deck_id}/history`  | daily review counts, accuracy, streak |
 | `GET`    | `/`                             | landing page (anonymous) or deck dashboard (signed in) |
 | `POST`   | `/signup`                       | create account |
 | `POST`   | `/login`                        | log in |

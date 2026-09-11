@@ -105,6 +105,22 @@ class ReviewLog(Base):
     interval_before: Mapped[float] = mapped_column(Float, default=0.0)
     interval_after: Mapped[float] = mapped_column(Float, default=0.0)
     ease_after: Mapped[float] = mapped_column(Float, default=2.5)
-    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+    # --- full snapshot of the card before this review ---
+    # Undo restores these verbatim. Storing the whole prior state (rather than
+    # recomputing it) means undo is exact even if the scheduling algorithm is
+    # later changed or tuned.
+    ease_before: Mapped[float] = mapped_column(Float, default=2.5)
+    repetitions_before: Mapped[int] = mapped_column(Integer, default=0)
+    lapses_before: Mapped[int] = mapped_column(Integer, default=0)
+    reviews_count_before: Mapped[int] = mapped_column(Integer, default=0)
+    status_before: Mapped[str] = mapped_column(String(20), default="new")
+    next_review_before: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    last_reviewed_before: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
 
     card: Mapped["Card"] = relationship("Card", back_populates="reviews")

@@ -279,25 +279,50 @@ def run_tests(client):
     assert "flip-card" in r.text
     print(f"[15] GET /decks/{deck_id}/study             -> 200  (study page renders)")
 
-    # --- 16. Rename deck --------------------------------------------------------
+    # --- 16. Undo a review restores the card exactly ---------------------------
+    r = client.get(f"/api/study/{deck_id}/next")
+    card = r.json()["card"]
+    before = {k: card[k] for k in
+              ("ease_factor", "interval_days", "repetitions", "lapses",
+               "reviews_count", "status", "next_review", "last_reviewed")}
+    client.post(f"/api/study/cards/{card['id']}/rate", json={"rating": "again"})
+    r = client.post(f"/api/study/{deck_id}/undo")
+    assert r.status_code == 200, r.text[:300]
+    restored = r.json()
+    assert all(restored[k] == v for k, v in before.items()), "undo did not restore state"
+    print("[16] POST /api/study/{id}/undo        -> 200  (card state restored exactly)")
+
+    # --- 17. Review history aggregates -----------------------------------------
+    client.post(f"/api/study/cards/{card['id']}/rate", json={"rating": "good"})
+    r = client.get(f"/api/study/{deck_id}/history?days=30")
+    assert r.status_code == 200
+    hist = r.json()
+    assert len(hist["daily"]) == 30
+    assert hist["total_reviews"] >= 1
+    assert hist["streak_days"] >= 1
+    print(f"[17] GET /api/study/{{id}}/history      -> 200  "
+          f"(reviews={hist['total_reviews']}, accuracy={hist['accuracy']}%, "
+          f"streak={hist['streak_days']}d)")
+
+    # --- 18. Rename deck --------------------------------------------------------
     r = client.patch(f"/api/decks/{deck_id}", json={"name": "Renamed Deck"})
     assert r.status_code == 200
     assert r.json()["name"] == "Renamed Deck"
-    print("[16] PATCH /api/decks/{id}            -> 200  (rename works)")
+    print("[18] PATCH /api/decks/{id}            -> 200  (rename works)")
 
-    # --- 17. Delete deck --------------------------------------------------------
+    # --- 19. Delete deck --------------------------------------------------------
     r = client.delete(f"/api/decks/{deck_id}")
     assert r.status_code == 204
     r = client.get("/api/decks")
     assert r.json() == []
-    print("[17] DELETE /api/decks/{id}           -> 204  (deck + cards gone)")
+    print("[19] DELETE /api/decks/{id}           -> 204  (deck + cards gone)")
 
-    # --- 18. OpenAPI docs endpoint ---------------------------------------------
+    # --- 20. OpenAPI docs endpoint ---------------------------------------------
     r = client.get("/docs")
     assert r.status_code == 200
-    print("[18] GET /docs                        -> 200  (OpenAPI UI up)")
+    print("[20] GET /docs                        -> 200  (OpenAPI UI up)")
 
-    print("\nAll 19 smoke tests passed.")
+    print("\nAll 21 smoke tests passed.")
 
 
 if __name__ == "__main__":

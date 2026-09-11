@@ -116,6 +116,137 @@
   </div>
 </section>
 
+<!-- Review activity -->
+<section class="mb-10" x-show="history" x-cloak>
+
+  <div class="flex items-baseline justify-between gap-4 mb-4">
+    <h2 class="font-display text-2xl font-semibold tracking-tight">Review activity</h2>
+    <span class="text-xs font-mono uppercase tracking-wider text-ink-500">last 30 days</span>
+  </div>
+
+  <template x-if="history && history.total_reviews === 0">
+    <div class="rounded-xl border-2 border-dashed border-paper-300 bg-paper-100/50 px-6 py-10 text-center text-ink-500">
+      No reviews yet. Study this deck and your progress will show up here.
+    </div>
+  </template>
+
+  <template x-if="history && history.total_reviews > 0">
+    <div>
+      <!-- Headline numbers: a KPI row, not a chart -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div class="rounded-lg bg-paper-100 border border-paper-300 p-4">
+          <div class="text-xs font-mono text-ink-500 uppercase tracking-wider">Reviews</div>
+          <div class="font-display text-3xl font-semibold mt-1" x-text="history.total_reviews"></div>
+        </div>
+        <div class="rounded-lg bg-paper-100 border border-paper-300 p-4">
+          <div class="text-xs font-mono text-ink-500 uppercase tracking-wider">Recalled</div>
+          <div class="font-display text-3xl font-semibold mt-1"
+               x-text="history.accuracy === null ? '--' : history.accuracy + '%'"></div>
+        </div>
+        <div class="rounded-lg bg-paper-100 border border-paper-300 p-4">
+          <div class="text-xs font-mono text-ink-500 uppercase tracking-wider">Streak</div>
+          <div class="font-display text-3xl font-semibold mt-1">
+            <span x-text="history.streak_days"></span><span class="text-base text-ink-500 ml-1"
+              x-text="history.streak_days === 1 ? 'day' : 'days'"></span>
+          </div>
+        </div>
+        <div class="rounded-lg bg-paper-100 border border-paper-300 p-4">
+          <div class="text-xs font-mono text-ink-500 uppercase tracking-wider">Busiest day</div>
+          <div class="font-display text-3xl font-semibold mt-1" x-text="history.busiest_day"></div>
+        </div>
+      </div>
+
+      <!-- Daily volume. One series, one hue: the job is magnitude over time,
+           so the rating split lives in the tooltip rather than in colour. -->
+      <div class="rounded-xl bg-paper-100 border border-paper-300 p-5 relative">
+        <div class="flex items-stretch gap-3">
+          <div class="flex flex-col justify-between text-[10px] font-mono text-ink-400 tabular-nums py-0.5 shrink-0">
+            <span x-text="history.busiest_day"></span>
+            <span>0</span>
+          </div>
+
+          <div class="flex-1 min-w-0">
+            <div class="relative h-36 border-b border-paper-300">
+              <div class="absolute inset-x-0 top-0 border-t border-paper-300/70"></div>
+              <div class="absolute inset-0 flex items-end gap-[2px]">
+                <template x-for="(d, i) in history.daily" :key="d.date">
+                  <div class="flex-1 h-full flex items-end justify-center min-w-0"
+                       @mouseenter="hoverDay = d" @mouseleave="hoverDay = null"
+                       @focus="hoverDay = d" @blur="hoverDay = null"
+                       tabindex="0" :aria-label="barLabel(d)">
+                    <div class="w-full max-w-[22px] transition-colors"
+                         :class="d.total > 0
+                            ? (hoverDay && hoverDay.date === d.date ? 'bg-ember-600' : 'bg-ember-500')
+                            : 'bg-paper-300'"
+                         :style="'height:' + barHeight(d) + '; border-radius: 4px 4px 0 0;'"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <div class="flex justify-between mt-2 text-[10px] font-mono text-ink-400">
+              <span x-text="shortDate(history.daily[0].date)"></span>
+              <span>today</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hover detail: the rating breakdown, as text -->
+        <div class="mt-4 pt-4 border-t border-paper-300 min-h-[42px]">
+          <template x-if="hoverDay">
+            <div class="flex items-center justify-between gap-4 flex-wrap text-sm">
+              <span class="font-medium" x-text="longDate(hoverDay.date)"></span>
+              <div class="flex items-center gap-4 text-xs font-mono text-ink-600 tabular-nums">
+                <span><span class="text-ink-900 font-semibold" x-text="hoverDay.total"></span> reviews</span>
+                <span class="text-rose-600" x-text="hoverDay.again + ' again'"></span>
+                <span class="text-amber2-500" x-text="hoverDay.hard + ' hard'"></span>
+                <span class="text-ember-600" x-text="hoverDay.good + ' good'"></span>
+                <span class="text-moss-600" x-text="hoverDay.easy + ' easy'"></span>
+              </div>
+            </div>
+          </template>
+          <template x-if="!hoverDay">
+            <div class="text-sm text-ink-400">Hover a bar for that day's breakdown.</div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Same data, readable without colour or a pointing device -->
+      <details class="mt-3">
+        <summary class="text-xs font-mono uppercase tracking-wider text-ink-500 cursor-pointer hover:text-ember-600 transition-colors">
+          Show as table
+        </summary>
+        <div class="mt-3 overflow-x-auto rounded-lg border border-paper-300">
+          <table class="w-full text-sm tabular-nums">
+            <thead class="bg-paper-200 text-xs font-mono uppercase tracking-wider text-ink-600">
+              <tr>
+                <th class="text-left px-3 py-2 font-medium">Date</th>
+                <th class="text-right px-3 py-2 font-medium">Total</th>
+                <th class="text-right px-3 py-2 font-medium">Again</th>
+                <th class="text-right px-3 py-2 font-medium">Hard</th>
+                <th class="text-right px-3 py-2 font-medium">Good</th>
+                <th class="text-right px-3 py-2 font-medium">Easy</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="d in history.daily.filter(x => x.total > 0)" :key="d.date">
+                <tr class="border-t border-paper-300">
+                  <td class="px-3 py-1.5" x-text="longDate(d.date)"></td>
+                  <td class="px-3 py-1.5 text-right font-semibold" x-text="d.total"></td>
+                  <td class="px-3 py-1.5 text-right text-ink-600" x-text="d.again"></td>
+                  <td class="px-3 py-1.5 text-right text-ink-600" x-text="d.hard"></td>
+                  <td class="px-3 py-1.5 text-right text-ink-600" x-text="d.good"></td>
+                  <td class="px-3 py-1.5 text-right text-ink-600" x-text="d.easy"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </template>
+</section>
+
 <!-- Card browser controls -->
 <section class="mb-5 flex items-center gap-3 flex-wrap">
   <div class="relative flex-1 min-w-[240px]">
@@ -221,6 +352,8 @@ function deckPage(deckId, generationStatus) {
     editBack: '',
     editingName: false,
     newName: '',
+    history: null,
+    hoverDay: null,
     _pollTimer: null,
     _pollTick: 0,
 
@@ -233,7 +366,39 @@ function deckPage(deckId, generationStatus) {
       } else {
         // Deck already ready (or failed) — load cards normally.
         this.loadCards();
+        this.loadHistory();
       }
+    },
+
+    async loadHistory() {
+      try {
+        const res = await fetch(`/api/study/${this.deckId}/history?days=30`);
+        if (!res.ok) return;           // non-fatal: the section stays hidden
+        this.history = await res.json();
+      } catch (_) { /* leave history null */ }
+    },
+
+    // Bars are sized against the busiest day so the tallest fills the plot.
+    // Days with no reviews still render a small stub, so the gap in a streak
+    // is visible and the day remains hoverable.
+    barHeight(day) {
+      const max = this.history?.busiest_day || 0;
+      if (!day.total || !max) return '3px';
+      return Math.max(6, Math.round((day.total / max) * 100)) + '%';
+    },
+
+    barLabel(day) {
+      return `${this.longDate(day.date)}: ${day.total} review${day.total === 1 ? '' : 's'}`;
+    },
+
+    shortDate(iso) {
+      const d = new Date(iso + 'T00:00:00');
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    },
+
+    longDate(iso) {
+      const d = new Date(iso + 'T00:00:00');
+      return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
     },
 
     _startPolling() {
@@ -259,6 +424,7 @@ function deckPage(deckId, generationStatus) {
             // freshly-generated deck — no Alpine reactivity edge cases.
             this.generationDone = true;
             this.generationDetail = 'Flashcards generated! Opening your deck…';
+            this.loadHistory();
             setTimeout(() => window.location.reload(), 900);
 
           } else if (data.generation_status === 'failed') {

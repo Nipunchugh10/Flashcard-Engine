@@ -96,6 +96,43 @@
       </div>
     </div>
 
+    <!-- Card actions: available whether or not the answer is showing -->
+    <div class="mt-6 flex items-center justify-center gap-2 text-sm" x-show="!editing" x-cloak>
+      <button type="button" @click="undo()" :disabled="!canUndo || busy"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-ink-500 hover:text-ember-600 hover:bg-paper-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 14L4 9l5-5"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 9h11a5 5 0 010 10h-1"/></svg>
+        Undo
+        <span class="kbd">U</span>
+      </button>
+      <span class="text-paper-300">&middot;</span>
+      <button type="button" @click="startEdit()"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-ink-500 hover:text-ember-600 hover:bg-paper-100 transition-colors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 13l9-9 3 3-9 9H4v-3z"/></svg>
+        Fix this card
+        <span class="kbd">E</span>
+      </button>
+    </div>
+
+    <!-- Inline editor: fix a bad card without leaving the session -->
+    <div class="mt-6 rounded-2xl border border-ember-500/40 bg-paper-100 p-6" x-show="editing" x-cloak>
+      <div class="text-xs font-mono uppercase tracking-wider text-ember-600 mb-3">Edit this card</div>
+      <label class="block text-xs text-ink-500 mb-1">Question</label>
+      <textarea x-model="editFront" rows="2"
+        class="w-full px-3 py-2 bg-paper-50 border border-paper-300 rounded-lg focus:outline-none focus:border-ember-500 font-display text-lg"></textarea>
+      <label class="block text-xs text-ink-500 mt-4 mb-1">Answer</label>
+      <textarea x-model="editBack" rows="3"
+        class="w-full px-3 py-2 bg-paper-50 border border-paper-300 rounded-lg focus:outline-none focus:border-ember-500"></textarea>
+      <div class="mt-4 flex items-center justify-end gap-2">
+        <button type="button" @click="cancelEdit()" class="px-4 py-2 text-sm text-ink-500 hover:text-ink-900">Cancel <span class="kbd">Esc</span></button>
+        <button type="button" @click="saveEdit()" :disabled="busy"
+          class="px-5 py-2 rounded-full bg-ember-500 text-paper-50 text-sm font-medium hover:bg-ember-600 disabled:opacity-50 transition-colors">Save</button>
+      </div>
+    </div>
+
+    <!-- Transient confirmation -->
+    <div x-show="toast" x-cloak x-transition.opacity
+      class="mt-4 text-center text-sm text-moss-600 font-medium" x-text="toast"></div>
+
     <div class="mt-8 text-center" x-show="!flipped" x-cloak>
       <button type="button" @click="flip()"
         class="inline-flex items-center gap-2 rounded-full bg-ink-900 text-paper-50 px-6 py-3 font-medium hover:bg-ember-600 transition-colors">
@@ -124,6 +161,14 @@
       <span><span class="text-ink-900 font-semibold" x-text="finalStats?.new"></span> new</span>
     </div>
 
+    <div class="mt-6" x-show="canUndo">
+      <button type="button" @click="undo()" :disabled="busy"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm text-ink-500 hover:text-ember-600 hover:bg-paper-100 transition-colors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 14L4 9l5-5"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 9h11a5 5 0 010 10h-1"/></svg>
+        Undo last review
+      </button>
+    </div>
+
     <div class="mt-10 flex items-center justify-center gap-3">
       <a href="/decks/{{ deck.id }}" class="px-5 py-2.5 text-ink-600 hover:text-ember-600 transition-colors">Back to deck</a>
       <a href="/" class="rounded-full bg-ink-900 text-paper-50 px-5 py-2.5 font-medium hover:bg-ember-600 transition-colors">All decks</a>
@@ -148,6 +193,18 @@ function studySession(deckId, totalCards) {
     remaining: 0,
     startRemaining: 0,
     finalStats: null,
+    canUndo: false,
+    busy: false,
+    editing: false,
+    editFront: '',
+    editBack: '',
+    toast: '',
+    _toastTimer: null,
+    // Timestamp of the last reveal. Space both reveals and grades "Good", so a
+    // quick double-tap would otherwise reveal and immediately grade a card the
+    // user never actually read.
+    flippedAt: 0,
+    GRACE_MS: 400,
 
     ratings: [
       { key: 'again', key_hint: '1', label: 'Again', classes: 'bg-paper-100 border-rose-500/40 text-rose-600 hover:bg-rose-500/5' },
@@ -183,12 +240,24 @@ function studySession(deckId, totalCards) {
     },
 
     flip() {
-      if (!this.card) return;
+      if (!this.card || this.editing) return;
       this.flipped = true;
+      this.flippedAt = Date.now();
+    },
+
+    // True while a Space press is too soon after the reveal to be deliberate.
+    inGrace() {
+      return Date.now() - this.flippedAt < this.GRACE_MS;
+    },
+
+    notify(message) {
+      this.toast = message;
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => { this.toast = ''; }, 2600);
     },
 
     async rate(rating) {
-      if (!this.card || this.rating) return;
+      if (!this.card || this.rating || this.editing) return;
       this.rating = true;
       const res = await fetch(`/api/study/cards/${this.card.id}/rate`, {
         method: 'POST',
@@ -200,7 +269,72 @@ function studySession(deckId, totalCards) {
         return;
       }
       this.rating = false;
+      if (res.ok) this.canUndo = true;
       await this.loadNext();
+    },
+
+    async undo() {
+      if (this.busy) return;
+      this.busy = true;
+      try {
+        const res = await fetch(`/api/study/${this.deckId}/undo`, { method: 'POST' });
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (res.status === 404) {
+          this.canUndo = false;
+          this.notify('Nothing left to undo.');
+          return;
+        }
+        if (!res.ok) { this.notify('Could not undo.'); return; }
+
+        // Put the restored card back in front of the user, unflipped, so the
+        // answer can be reconsidered rather than silently re-scheduled.
+        const card = await res.json();
+        this.card = card;
+        this.flipped = false;
+        this.editing = false;
+        this.done = false;
+        this.loading = false;
+        this.remaining = this.remaining + 1;
+        this.notify('Review undone — card restored.');
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    startEdit() {
+      if (!this.card) return;
+      this.editing = true;
+      this.editFront = this.card.front;
+      this.editBack = this.card.back;
+    },
+
+    cancelEdit() {
+      this.editing = false;
+    },
+
+    async saveEdit() {
+      if (!this.card || this.busy) return;
+      if (!this.editFront.trim() || !this.editBack.trim()) {
+        this.notify('Both sides need text.');
+        return;
+      }
+      this.busy = true;
+      try {
+        const res = await fetch(`/api/cards/${this.card.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ front: this.editFront, back: this.editBack }),
+        });
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (!res.ok) { this.notify('Could not save.'); return; }
+        const updated = await res.json();
+        this.card.front = updated.front;
+        this.card.back = updated.back;
+        this.editing = false;
+        this.notify('Card updated.');
+      } finally {
+        this.busy = false;
+      }
     },
 
     // Very lightweight preview of what each button will do to the interval.
@@ -231,6 +365,23 @@ document.addEventListener('keydown', (e) => {
   const scope = Alpine.$data(root);
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+  // Escape leaves the editor even though focus is inside a textarea.
+  if (scope.editing) {
+    if (e.key === 'Escape') { e.preventDefault(); scope.cancelEdit(); }
+    return;
+  }
+
+  if (e.key === 'u' || e.key === 'U' || ((e.ctrlKey || e.metaKey) && e.key === 'z')) {
+    e.preventDefault();
+    scope.undo();
+    return;
+  }
+  if (e.key === 'e' || e.key === 'E') {
+    e.preventDefault();
+    scope.startEdit();
+    return;
+  }
+
   if (!scope.flipped && (e.code === 'Space' || e.code === 'Enter')) {
     e.preventDefault();
     scope.flip();
@@ -239,8 +390,14 @@ document.addEventListener('keydown', (e) => {
   if (scope.flipped) {
     if (e.key === '1') { e.preventDefault(); scope.rate('again'); }
     if (e.key === '2') { e.preventDefault(); scope.rate('hard'); }
-    if (e.key === '3' || e.code === 'Space') { e.preventDefault(); scope.rate('good'); }
     if (e.key === '4') { e.preventDefault(); scope.rate('easy'); }
+    if (e.key === '3') { e.preventDefault(); scope.rate('good'); }
+    // Space grades "Good", but not immediately after it was used to reveal:
+    // holding or double-tapping Space would otherwise grade an unread card.
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (!scope.inGrace()) scope.rate('good');
+    }
   }
 });
 </script>

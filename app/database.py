@@ -62,6 +62,13 @@ def _apply_migrations() -> None:
         ("decks", "generation_status", "VARCHAR(20) DEFAULT 'ready'"),
         ("decks", "generation_error", "TEXT DEFAULT NULL"),
         ("users", "session_epoch", "INTEGER DEFAULT 0 NOT NULL"),
+        ("review_logs", "ease_before", "FLOAT DEFAULT 2.5"),
+        ("review_logs", "repetitions_before", "INTEGER DEFAULT 0"),
+        ("review_logs", "lapses_before", "INTEGER DEFAULT 0"),
+        ("review_logs", "reviews_count_before", "INTEGER DEFAULT 0"),
+        ("review_logs", "status_before", "VARCHAR(20) DEFAULT 'new'"),
+        ("review_logs", "next_review_before", "TIMESTAMP DEFAULT NULL"),
+        ("review_logs", "last_reviewed_before", "TIMESTAMP DEFAULT NULL"),
     ]
     with engine.connect() as conn:
         for table, column, col_def in migrations:
