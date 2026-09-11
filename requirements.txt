@@ -16,3 +16,6 @@ anthropic==0.42.0    # Anthropic Claude (optional)
 # Auth
 bcrypt==4.2.1
 itsdangerous==2.2.0
+
+# Testing — fastapi's TestClient needs httpx at runtime (smoke_test.py)
+httpx==0.28.1

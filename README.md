@@ -48,31 +48,57 @@ Priority order: **Gemini > Anthropic > heuristic**. Override with `LLM_PROVIDER=
 ## Quick start (local)
 
 ```bash
-# 1. Clone & enter the project
 git clone https://github.com/Nipunchugh10/Flashcard-Engine.git
 cd Flashcard-Engine
-
-# 2. Create a virtual environment
-python -m venv .venv
-source .venv/bin/activate        # Linux/Mac
-# .venv\Scripts\activate         # Windows
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Configure
-cp .env.example .env
-#    Open .env and paste your API key (see table above).
-#    At minimum, set GEMINI_API_KEY.
-#    Also change SECRET_KEY to something random for production.
-
-# 5. Run
 ./run.sh
-#   or: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# 6. Open http://localhost:8000
-#    Create an account and start uploading PDFs!
 ```
+
+That's it. On first run `run.sh` creates a virtualenv in `.venv`, installs everything in
+`requirements.txt`, copies `.env.example` to `.env` if you don't have one, and starts the
+server on <http://localhost:8000>. Later runs skip straight to the server, and dependencies
+are reinstalled automatically whenever `requirements.txt` changes.
+
+Then open <http://localhost:8000>, create an account, and upload a PDF.
+
+```bash
+./run.sh          # start the dev server (auto-reload)
+./run.sh test     # run the 19 end-to-end smoke tests
+PORT=3000 ./run.sh   # serve on a different port
+```
+
+**Add your API key.** Until you put a `GEMINI_API_KEY` in `.env`, the app runs in offline
+heuristic mode and writes noticeably worse cards. Get a free key at
+[Google AI Studio](https://aistudio.google.com/app/apikey). Set `SECRET_KEY` to a random
+string too — if it changes between restarts, everyone gets logged out.
+
+<details>
+<summary>Prerequisites, and doing it manually</summary>
+
+You need Python 3.10 or newer. On a fresh Debian/Ubuntu machine:
+
+```bash
+sudo apt install python3 python3-venv python3-pip
+```
+
+`python3-venv` is the one people miss — without it `run.sh` can't create the virtualenv.
+Fedora: `sudo dnf install python3 python3-pip`. Arch: `sudo pacman -S python python-pip`.
+
+If you'd rather drive it by hand:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate          # Linux/macOS
+# .venv\Scripts\activate           # Windows
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+A virtualenv created on Windows will not run on Linux (its interpreter path points at
+`C:\...`). `run.sh` detects that case and rebuilds `.venv` automatically, so a project
+folder copied across machines just works.
+
+</details>
 
 The SQLite DB and uploaded PDFs land under `./data/` and `./uploads/` respectively, both gitignored.
 
@@ -94,18 +120,19 @@ PDFs longer than 100 pages will have only the first 100 pages processed. Upload 
 
 ### Adaptive card scaling
 
-The number of flashcards generated scales linearly with how many pages were actually processed — so a short handout doesn't get flooded with mediocre cards and a 100-page textbook hits the full 70-card ceiling:
+The number of flashcards scales with **how much text the PDF actually contains**, not with its page count — roughly one card per 350 characters, capped at 8 cards per page and 70 per deck:
 
-| Pages in PDF | Cards generated (approx.) |
+| Document | Cards generated (approx.) |
 |---|---|
-| 1–5 | 3–4 |
-| 10 | 7 |
-| 20 | 14 |
-| 50 | 35 |
-| 75 | 52 |
-| 100+ | 70 (maximum) |
+| 1 dense page | 7 |
+| 2 pages | 15 |
+| 5-page paper | 37 |
+| 10+ pages | 70 (maximum) |
+| 20-page scanned PDF, little real text | 3 |
 
-A secondary character-volume check prevents very sparse / image-heavy PDFs from inflating the count beyond what the actual text content justifies.
+Driving the budget from character volume means image-heavy or sparse PDFs fall to the 3-card floor on their own, with no special casing, while a dense handout earns a deck worth studying.
+
+> **Changed:** page count used to be the primary signal (`pages / 100 × 70`). That starved short documents — a dense 5-page paper was capped at 4 cards and a 10-page chapter at 7, however much text was on the pages. Character volume is now primary and page count only supplies the per-page ceiling.
 
 ---
 
@@ -113,7 +140,7 @@ A secondary character-volume check prevents very sparse / image-heavy PDFs from 
 
 1. **Upload** — your PDF is saved and a deck is created instantly in "processing" state.
 2. **Background thread** — PDF text extraction and LLM calls happen asynchronously, so you're never blocked.
-3. **Adaptive budget** — the card target is calculated from the number of pages processed (linear 1–100 pages → 3–70 cards) and capped by actual text volume.
+3. **Adaptive budget** — the card target is calculated from total text volume (~1 card per 350 chars), capped at 8 cards per page and 70 per deck.
 4. **Concurrent API calls** — up to 3 LLM calls run in parallel for speed.
 5. **Polling** — the frontend checks status every 2 seconds. The spinner shows animated progress messages while waiting.
 6. **Completion** — when cards are ready, the spinner switches to a green checkmark and the page auto-reloads to show your deck — no manual refresh needed. A "Taking too long? Click to refresh" link is always visible as a fallback.
@@ -175,7 +202,16 @@ flashcard-engine/
 │       ├── api_decks.py           upload (async) / list / rename / delete / status
 │       ├── api_cards.py           list / edit / delete
 │       └── api_study.py           next-card / rate
-├── templates/                     Jinja2 views
+├── templates/
+│   ├── landing.html               public welcome page (anonymous visitors)
+│   ├── base.html                  app shell (header + upload modal)
+│   ├── auth_base.html             login / signup shell
+│   ├── index.html                 deck dashboard
+│   ├── deck.html                  card browser
+│   ├── study.html                 review session
+│   └── components/
+│       ├── head.html              shared <head> (fonts, Tailwind config)
+│       └── upload_modal.html      PDF drop zone
 ├── static/                        CSS + JS
 ├── data/                          SQLite DB (gitignored)
 ├── uploads/                       raw PDFs (gitignored)
@@ -192,6 +228,8 @@ flashcard-engine/
 **Background processing.** PDF upload returns instantly. Extraction and LLM calls happen in a background thread with its own DB session. The frontend polls a lightweight `/status` endpoint every 2 seconds. This prevents request timeouts on free-tier hosts like Render.
 
 **Concurrent LLM calls.** Up to 3 chunk-level LLM calls run in parallel via `ThreadPoolExecutor`, cutting generation time by ~3×.
+
+**Landing page at `/`.** Anonymous visitors get a public welcome page explaining what the app does; signed-in users get their deck dashboard at the same URL. Previously `/` redirected straight to `/login`, which gave first-time visitors no context.
 
 **SM-2, not Leitner.** Leitner is simpler but coarse: five boxes, fixed intervals. SM-2 adapts the interval per card based on your actual performance, so cards you genuinely know drift further apart while shaky ones keep coming back. I kept the classic SM-2 formula but used a friendlier 4-button rating (Again / Hard / Good / Easy) mapping to qualities 0/3/4/5, which is what Anki does — exposing raw 0–5 is hostile to users.
 
@@ -226,6 +264,7 @@ flashcard-engine/
 | `DELETE` | `/api/cards/{id}`               | delete card |
 | `GET`    | `/api/study/{deck_id}/next`     | next due card for a session |
 | `POST`   | `/api/study/cards/{id}/rate`    | rate a card (`again`/`hard`/`good`/`easy`) |
+| `GET`    | `/`                             | landing page (anonymous) or deck dashboard (signed in) |
 | `POST`   | `/signup`                       | create account |
 | `POST`   | `/login`                        | log in |
 | `GET`    | `/logout`                       | log out |

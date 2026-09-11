@@ -1,0 +1,16 @@
+# Normalise line endings. This repo has moved between Windows and Linux, and a
+# shell script checked out with CRLF fails with a confusing "bad interpreter"
+# error, so force LF for everything textual.
+* text=auto eol=lf
+
+*.sh    text eol=lf
+*.py    text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.js    text eol=lf
+*.md    text eol=lf
+
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.db    binary
