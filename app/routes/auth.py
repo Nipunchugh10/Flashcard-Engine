@@ -37,7 +37,14 @@ _TOO_MANY = "Too many attempts. Please wait a few minutes and try again."
 def _render(request: Request, template: str, error: str | None, status: int = 400, **extra):
     return templates.TemplateResponse(
         request, template,
-        {"app_name": config.APP_NAME, "error": error, **extra},
+        {
+            "app_name": config.APP_NAME,
+            "error": error,
+            # Drive the form's client-side hints from the same constant the
+            # server validates against, so they cannot drift apart.
+            "min_password_length": config.MIN_PASSWORD_LENGTH,
+            **extra,
+        },
         status_code=status,
     )
 
