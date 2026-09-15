@@ -34,7 +34,9 @@ The application was audited in a hardened state — a prior pass had already fix
 session forgery, IDOR, logout revocation, timing-based user enumeration and
 security headers. This audit targeted what that pass missed.
 
-**17 findings across 41 prompts. 11 fixed during this audit, 6 remain open.**
+**17 findings across 41 prompts. 11 fixed during this audit, 5 remain open**
+(a sixth — operational finding C, database persistence — was closed on
+verification: the Space is backed by Neon Postgres, not ephemeral SQLite).
 
 | Severity | Found | Fixed | Open |
 |---|---|---|---|
@@ -98,8 +100,8 @@ bound parameters throughout, zero raw string interpolation). No `eval`, no
 | # | Issue | Evidence | Severity | Status |
 |---|---|---|---|---|
 | A | Hugging Face **write token in plaintext** in `.git/config` remote URL | `grep hf_ .git/config` → 1 match | 🟠 High | **Open — rotate** |
-| B | `.env` `SECRET_KEY` is `recall-flashcard-engine-secret-key-2026` — guessable, on the placeholder blocklist | `app/config.py` substitutes a random key + logs CRITICAL | 🟡 Medium | **Open — set a real key** |
-| C | `DATABASE_URL` unverified on the Space — if unset, SQLite in an ephemeral container loses all data per rebuild | Cannot inspect Space secrets | 🟠 High | **Open — verify** |
+| B | `SECRET_KEY` is set on the Space, but if its value equals the local `.env` value it is **rejected as guessable** and replaced with a random key each boot | `.env` holds `recall-flashcard-engine-secret-key-2026`, which `app/config.py` blocklists; Space secret dated **Jun 30**, before that blocklist existed | 🟡 Medium | **Open — verify the value** |
+| C | ~~`DATABASE_URL` unverified — data loss per rebuild~~ | **Resolved.** Space secrets confirm `DATABASE_URL` is set; Neon project `flashcard-db` (Postgres 18, AWS us-east-2) shows recent compute activity, so the app is genuinely connected | — | ✅ **Closed** |
 
 ---
 
@@ -712,8 +714,12 @@ allows dropping `'unsafe-eval'` from the CSP.
    an operator concern. The app needs only `SELECT/INSERT/UPDATE/DELETE` plus
    `ALTER TABLE ADD COLUMN` for the startup migration. Recommend a dedicated role
    without `DROP`/`CREATE DATABASE`.
-2. **Backups** — Neon provides PITR; no application-level backup code exists, which
-   is correct (nothing writes a dump to a web-reachable path).
+2. **Backups** — confirmed running on **Neon Postgres 18** (project `flashcard-db`,
+   branch `production`, AWS us-east-2) with **6-hour history retention** on the free
+   tier. No application-level backup code exists, which is correct — nothing writes a
+   dump to a web-reachable path. Note the 6-hour PITR window is short: a problem
+   discovered the next morning is past the recovery horizon. Consider periodic
+   `pg_dump` to off-platform storage if the data matters.
 
 ---
 
@@ -1122,14 +1128,16 @@ weakest remaining path and it is weak.
 The genuine worst case is not application code. `SECRET_KEY` disclosure allows
 forging a session for any `user_id`; the HF token in `.git/config` allows pushing
 arbitrary code to the live Space. Both are **operational** items A and B, and both
-remain open.
+remain open. Note that persistence is now confirmed (Neon Postgres), which *raises*
+the stakes on both: data written by users now survives, so a compromise reaches a
+durable store rather than an ephemeral one.
 
 ### Step 5 — Risk matrix
 
 | Likelihood ↓ / Impact → | Low | Medium | High |
 |---|---|---|---|
 | **High** | #13 magic bytes, #14 orphans | #12 CSRF-Lax | — |
-| **Medium** | #15 SRI | #16 GDPR | **A: HF token**, **C: DATABASE_URL** |
+| **Medium** | #15 SRI | #16 GDPR | **A: HF token** |
 | **Low** | #17 CI/CD | — | **B: SECRET_KEY** |
 
 The three highest cells are all operational, not code. That is the headline: the
@@ -1438,14 +1446,22 @@ field-level exposure in P9 (`response_model` DTOs), and resource consumption in 
 | Auth security events logged | 0 | 6 event types |
 | Smoke / security tests | 21 / 45 | 21 / 45 (all passing) |
 
-**The six open findings, in priority order:**
+**The five open findings, in priority order:**
 
 1. **Operational A** — rotate the Hugging Face token in `.git/config` (High)
-2. **Operational C** — verify `DATABASE_URL` is set on the Space (High — data loss)
-3. **Operational B** — set a real `SECRET_KEY` in `.env` and Space secrets (Medium)
-4. **#16** — add `DELETE /api/me` + data export + a privacy note about Gemini (Medium)
-5. **#12** — `SameSite=Strict` or CSRF tokens on the three bodyless POSTs (Medium)
-6. **#13/#14/#15/#17** — magic-byte check, upload janitor, SRI, CI/CD gates (Low/Info)
+2. **Operational B** — confirm the Space's `SECRET_KEY` is not the guessable value
+   (Medium). Being *set* is not sufficient: `app/config.py` refuses placeholder and
+   sub-32-character keys and substitutes a random one, which keeps sessions
+   unforgeable but logs every user out on each rebuild. The Space secret predates
+   that blocklist. **Check:** the startup log shows
+   `CRITICAL … INSECURE CONFIGURATION: SECRET_KEY is a known placeholder value`
+   if it is being rejected — silence means the key is accepted and sessions persist.
+3. **#16** — add `DELETE /api/me` + data export + a privacy note about Gemini (Medium)
+4. **#12** — `SameSite=Strict` or CSRF tokens on the three bodyless POSTs (Medium)
+5. **#13/#14/#15/#17** — magic-byte check, upload janitor, SRI, CI/CD gates (Low/Info)
+
+**Closed since the audit:** operational finding C — `DATABASE_URL` is configured and
+backed by Neon Postgres 18, so decks and accounts persist across Space rebuilds.
 
 ---
 
