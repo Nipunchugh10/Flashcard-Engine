@@ -74,18 +74,52 @@ auth_limiter = RateLimiter(
     window_seconds=config.AUTH_RATE_LIMIT_WINDOW,
 )
 
+# Upload is the one endpoint where a single authenticated request causes PDF
+# parsing, several LLM calls and billable token spend.
+upload_limiter = RateLimiter(
+    attempts=config.UPLOAD_RATE_LIMIT,
+    window_seconds=config.UPLOAD_RATE_WINDOW,
+)
+
+
+def client_ip(request: Request) -> str:
+    """Best-available client address, resistant to header spoofing.
+
+    X-Forwarded-For is appended to by each proxy, so it reads
+    ``<client>, <proxy1>, <proxy2>``. Everything left of the last
+    TRUSTED_PROXY_HOPS entries is attacker-controlled: a caller can simply send
+    their own X-Forwarded-For and it lands at the front. Taking the left-most
+    entry therefore let anyone defeat rate limiting by rotating the header, so
+    we count in from the RIGHT instead, and ignore the header entirely when no
+    proxy is configured.
+    """
+    peer = request.client.host if request.client else "unknown"
+    hops = config.TRUSTED_PROXY_HOPS
+    if hops <= 0:
+        return peer
+
+    raw = request.headers.get("x-forwarded-for", "")
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if not parts:
+        return peer
+    # parts[-hops] is the address the nearest trusted proxy observed.
+    idx = len(parts) - hops
+    return parts[idx] if 0 <= idx < len(parts) else peer
+
 
 def client_key(request: Request, suffix: str = "") -> str:
-    """Identify the caller for rate limiting.
-
-    Behind Hugging Face / Render the peer address is the proxy, so prefer the
-    left-most X-Forwarded-For entry when present.
-    """
-    forwarded = request.headers.get("x-forwarded-for", "")
-    ip = forwarded.split(",")[0].strip() if forwarded else ""
-    if not ip:
-        ip = request.client.host if request.client else "unknown"
+    """Rate-limit key for the caller's network origin."""
+    ip = client_ip(request)
     return f"{ip}:{suffix}" if suffix else ip
+
+
+def account_key(identifier: str, suffix: str = "") -> str:
+    """Rate-limit key for a targeted account.
+
+    IP-based limits alone do not stop a distributed or proxy-rotated attack on
+    one account, so failed logins are counted per-email as well.
+    """
+    return f"account:{identifier.strip().lower()}:{suffix}"
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +157,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
         headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+
+        # Anything rendered for a signed-in user is per-user data. Without this
+        # a shared proxy or the browser back-button cache can serve one user's
+        # decks to the next person on the machine.
+        if request.cookies.get(config.SESSION_COOKIE_NAME):
+            headers.setdefault("Cache-Control", "no-store, private")
 
         if _https(request):
             headers.setdefault(

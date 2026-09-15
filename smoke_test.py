@@ -34,7 +34,7 @@ def _minimal_pdf_bytes() -> bytes:
     2 pages) that the adaptive card budget returns a realistic deck rather
     than the 3-card floor.
     """
-    import fitz  # PyMuPDF
+    import pymupdf  # the modern name for the fitz module
 
     page_one = (
         "Spaced Repetition is a learning method that schedules reviews at expanding "
@@ -78,7 +78,7 @@ def _minimal_pdf_bytes() -> bytes:
         "and resistant to interference over time. "
     )
 
-    doc = fitz.open()
+    doc = pymupdf.open()
     for body in (page_one, page_two):
         page = doc.new_page()
         page.insert_textbox((50, 50, 550, 780), body, fontsize=11)

@@ -93,7 +93,14 @@ def _call_openai_compatible(
     except ImportError as e:
         raise RuntimeError("openai package not installed") from e
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    # Without an explicit timeout the SDK default is 600s with 2 retries, so a
+    # single hung upstream can pin a worker thread for half an hour.
+    client = OpenAI(
+        api_key=api_key,
+        base_url=base_url,
+        timeout=config.LLM_TIMEOUT_SECONDS,
+        max_retries=config.LLM_MAX_RETRIES,
+    )
     response = client.chat.completions.create(
         model=model,
         temperature=0.3,
@@ -132,7 +139,11 @@ def _call_anthropic(chunk: str, max_cards: int) -> list[GeneratedCard]:
     except ImportError as e:
         raise RuntimeError("anthropic package not installed") from e
 
-    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(
+        api_key=config.ANTHROPIC_API_KEY,
+        timeout=config.LLM_TIMEOUT_SECONDS,
+        max_retries=config.LLM_MAX_RETRIES,
+    )
     response = client.messages.create(
         model=config.ANTHROPIC_MODEL,
         max_tokens=1500,

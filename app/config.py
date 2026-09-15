@@ -116,6 +116,23 @@ AUTH_RATE_LIMIT_WINDOW = int(os.getenv("AUTH_RATE_LIMIT_WINDOW", "300"))  # seco
 # Minimum password length accepted at signup.
 MIN_PASSWORD_LENGTH = int(os.getenv("MIN_PASSWORD_LENGTH", "8"))
 
+# How many reverse proxies sit in front of this app. X-Forwarded-For is a
+# client-supplied header that each proxy APPENDS to, so only the last N entries
+# are trustworthy -- the left-most value is whatever the caller typed. Rate
+# limiting keyed on the left-most entry is bypassed by rotating the header.
+# 1 = one trusted proxy (Hugging Face, Render). 0 = no proxy, use the peer
+# address and ignore X-Forwarded-For entirely.
+TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "1"))
+
+# Outbound LLM call limits, so a slow or hung provider cannot pin worker threads.
+LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
+LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "1"))
+
+# Uploads allowed per client per window. PDF parsing plus LLM calls is the most
+# expensive thing an authenticated user can trigger, and it costs real money.
+UPLOAD_RATE_LIMIT = int(os.getenv("UPLOAD_RATE_LIMIT", "10"))
+UPLOAD_RATE_WINDOW = int(os.getenv("UPLOAD_RATE_WINDOW", "3600"))
+
 # Emit HSTS. Only enable when the site is genuinely HTTPS-only.
 ENABLE_HSTS = os.getenv("ENABLE_HSTS", "auto").strip().lower()
 

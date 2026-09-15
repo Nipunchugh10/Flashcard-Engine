@@ -1,0 +1,38 @@
+# Without this, `COPY . /code/` bakes the whole working directory into the
+# image: the real .env (API keys + SECRET_KEY), the local SQLite database with
+# user password hashes, and every PDF users have uploaded. Image layers are
+# readable by anyone who can pull the image.
+
+.env
+.env.*
+!.env.example
+
+# Local database and user uploads
+data/
+uploads/
+*.db
+*.db-shm
+*.db-wal
+
+# Virtualenvs and caches
+.venv*/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# VCS and tooling
+.git/
+.github/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+
+# Docs and local scratch
+*.md
+!README.md
+*.log

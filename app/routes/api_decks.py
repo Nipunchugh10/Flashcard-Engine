@@ -7,7 +7,7 @@ import threading
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from ..database import SessionLocal, get_db
 from ..flashcard_generator import generate_cards_for_chunks
 from ..pdf_processor import extract_pdf
 from ..schemas import DeckOut, DeckStats, RenameDeckIn
+from ..security import client_key, upload_limiter
 from ..stats import compute_deck_stats
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,7 @@ def deck_status(
 
 @router.post("/upload", response_model=DeckOut, status_code=status.HTTP_201_CREATED)
 async def upload_pdf(
+    request: Request,
     file: UploadFile = File(...),
     name: str | None = Form(None),
     db: Session = Depends(get_db),
@@ -124,6 +126,16 @@ async def upload_pdf(
     """Upload a PDF, validate it, create a deck in 'processing' state, and
     kick off card generation in a background thread.  Returns immediately
     so the request never times out on Render's free tier."""
+
+    # Each upload costs PDF parsing, several LLM calls and billable tokens, so
+    # it is limited per client and per account rather than left unbounded.
+    for key in (client_key(request, "upload"), f"user:{user.id}:upload"):
+        if upload_limiter.is_limited(key):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many uploads. Please wait a while before uploading again.",
+                headers={"Retry-After": str(upload_limiter.retry_after(key))},
+            )
 
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
@@ -167,6 +179,9 @@ async def upload_pdf(
     db.commit()
     db.refresh(deck)
 
+    for key in (client_key(request, "upload"), f"user:{user.id}:upload"):
+        upload_limiter.record_failure(key)   # counts attempts, not just failures
+
     # Fire-and-forget background thread.
     thread = threading.Thread(
         target=_process_deck_background,
@@ -200,7 +215,12 @@ def _process_deck_background(deck_id: int, pdf_path: Path) -> None:
         except Exception as e:
             logger.exception("Background: PDF extraction failed for deck %d", deck_id)
             deck.generation_status = "failed"
-            deck.generation_error = f"Could not read PDF: {e}"
+            # The exception text can carry absolute paths and library internals.
+            # Log the detail; show the user something actionable instead.
+            deck.generation_error = (
+                "Could not read this PDF. It may be corrupted, encrypted, or "
+                "image-only. Try a text-based PDF."
+            )
             db.commit()
             return
 
@@ -222,7 +242,11 @@ def _process_deck_background(deck_id: int, pdf_path: Path) -> None:
         except Exception as e:
             logger.exception("Background: Card generation failed for deck %d", deck_id)
             deck.generation_status = "failed"
-            deck.generation_error = f"Card generation failed: {e}"
+            # Provider errors can quote request URLs and key fragments.
+            deck.generation_error = (
+                "Card generation failed. This is usually a temporary problem "
+                "with the AI provider — please try again."
+            )
             db.commit()
             return
 

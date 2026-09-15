@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-import fitz  # PyMuPDF
+import pymupdf  # the modern name for the fitz module
 
 from .config import CHUNK_TARGET_CHARS, MAX_PDF_PAGES, MAX_TOTAL_CARDS
 
@@ -78,7 +78,7 @@ def extract_pdf(path: Path | str) -> PDFExtract:
     if not path.exists():
         raise FileNotFoundError(path)
 
-    doc = fitz.open(path)
+    doc = pymupdf.open(path)
     total_pages = doc.page_count
     pages_to_read = min(total_pages, MAX_PDF_PAGES)
 

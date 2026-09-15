@@ -1,20 +1,26 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-sqlalchemy==2.0.36
-psycopg2-binary==2.9.10   # PostgreSQL driver (required for Render Postgres)
-pydantic==2.10.4
-python-multipart==0.0.20
-python-dotenv==1.0.1
-aiofiles==24.1.0
-jinja2==3.1.5
-pymupdf==1.25.1
+# Pinned exactly: a floating range lets a future release land in production
+# without review. Re-audit with `pip-audit` before bumping any of these.
+fastapi==0.141.1
+starlette==1.6.0          # pinned explicitly: 7 advisories fixed since 0.41.3
+uvicorn[standard]==0.53.0
+sqlalchemy==2.0.53
+psycopg2-binary==2.9.10   # PostgreSQL driver (Neon / Render)
+pydantic==2.13.5
+python-multipart==0.0.32  # 6 advisories fixed since 0.0.20 (multipart DoS, traversal)
+python-dotenv==1.2.3      # PYSEC-2026-2270 (symlink follow in set_key)
+aiofiles==25.1.0
+jinja2==3.1.6             # PYSEC-2026-1471 (sandbox escape via |attr)
+pymupdf==1.28.2
+
+# Build tooling — pinned because pip-audit flags older setuptools in the image.
+setuptools==83.0.0
 
 # LLM providers (only the ones you set keys for actually get used)
 openai==1.59.6       # drives Gemini via its OpenAI-compatible endpoint
 anthropic==0.42.0    # Anthropic Claude (optional)
 
 # Auth
-bcrypt==4.2.1
+bcrypt==5.0.0
 itsdangerous==2.2.0
 
 # Testing — fastapi's TestClient needs httpx at runtime (smoke_test.py)
