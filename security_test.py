@@ -215,10 +215,11 @@ def main() -> None:
         print("\n9. Hardened response headers")
         h = TestClient(app).get("/").headers
         check("Content-Security-Policy present", "content-security-policy" in h)
-        check("frame-ancestors 'none' (clickjacking)",
-              "frame-ancestors 'none'" in h.get("content-security-policy", ""))
+        check("frame-ancestors allows Hugging Face and self (clickjacking)",
+              "frame-ancestors 'self'" in h.get("content-security-policy", "") and
+              "https://huggingface.co" in h.get("content-security-policy", ""))
         check("X-Content-Type-Options nosniff", h.get("x-content-type-options") == "nosniff")
-        check("X-Frame-Options DENY", h.get("x-frame-options") == "DENY")
+        check("X-Frame-Options omitted for Hugging Face iframe embedding", "x-frame-options" not in h)
         check("Referrer-Policy set", "referrer-policy" in h)
         hh = TestClient(app).get("/", headers=https).headers
         check("HSTS sent over HTTPS", "strict-transport-security" in hh)

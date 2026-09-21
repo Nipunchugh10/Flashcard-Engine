@@ -136,7 +136,7 @@ CSP = "; ".join([
     "default-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
-    "frame-ancestors 'none'",
+    "frame-ancestors 'self' https://huggingface.co https://*.huggingface.co https://*.hf.space",
     "form-action 'self'",
     "img-src 'self' data:",
     "font-src 'self' https://fonts.gstatic.com",
@@ -153,7 +153,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         headers = response.headers
         headers.setdefault("Content-Security-Policy", CSP)
         headers.setdefault("X-Content-Type-Options", "nosniff")
-        headers.setdefault("X-Frame-Options", "DENY")
+        # X-Frame-Options is omitted in favor of CSP frame-ancestors, which allows
+        # embedding within Hugging Face Spaces (https://huggingface.co) while blocking all others.
         headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
         headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
